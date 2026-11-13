@@ -32,3 +32,16 @@ Back to [[Overview]] · [[Models]] · [[Experiments]]
 - **Why:** intuitively short rentals are booked more spontaneously, so independence is a real assumption. The joint estimate drops it at no cost: the sample is every pickup in the window, so there's no truncation bias.
 - **What the data say:** practically independent. Spearman(L, ℓ) = −0.002 (n = 26,715), and the mean lead is ≈ 4.6 d for every L from 1 to 10. Per station type × category |ρ| ≤ 0.07; the largest is airport economy at −0.07, about 2.6 SE. **The station type does matter:** airport leads are ~0.7 d shorter. Weekday has almost no effect on lead or L.
 - **Rejected:** a product of marginals (an assumption we don't need); a joint per station (fewer counts; maybe later as a check).
+
+## 2026-11-13: One full MIP (M1), levels are its restrictions
+- **Decision:** write the model once, fully, as [[M1 Full Fleet MIP]] — add/remove + driver/truck transfers on a time-space network + one-step upgrades + fare buckets — and obtain L1/L2 by fixing variables to zero. Three modeling choices to stay faithful to the scorer:
+  - the greedy "own category first" of R7 is enforced exactly with one binary $\theta_{s,k,d}$ (560 total) instead of letting an LP second stage optimize the allocation;
+  - non-concave bucket sets (downtown midsize) get prefix binaries so buckets fill in order;
+  - transfers with $d+\ell>14$ are dropped (they only cost; and a transfer is no removal dodge, since in-transit cars keep paying holding).
+- **Why:** the README says one model covers all levels; an exact match to the scorer means our objective equals the official profit given the forecast, so "beats on our scenarios" is meaningful. A smarter-than-scorer LP would silently overstate revenue.
+- **Rejected:** separate small models per level (duplicated flow/validity code, version drift); SOS2 instead of prefix binaries (finer discretization needed to reproduce R8 exactly).
+
+## 2026-11-13: R6 fix during implementation — starved binary, not an epigraph
+- **Decision:** in `fleetopt/model_base.py` (M1), $a^{fr}_{s,k,d} = \max(0, u_s f - c)$ is enforced exactly with one binary $w_{s,k,d}$ per capacity cell; the M1 note is updated in place (no experiments ran against the wrong version).
+- **Why:** the first draft had only the lower bounds $a^{fr} \ge u_s f - c,\ a^{fr} \ge 0$ and claimed maximality would tighten them — wrong: $a^{fr}$ then has no upper bound and the solver serves demand "out of thin air" (a mechanics test with 200 car-days/day at S05 served fully with zero fleet changes). The two-branch binary is honest in both directions: $w=0$ forces $a^{fr}=0$, $w=1$ forces $a^{fr}=u_s f - c \ge 0$.
+- **Verified after the fix:** the same mechanics test now draws 3 truck transfers (one loaded with midsize cars serving compact demand — the scorer's upgrade rule working through our model) and a served ramp 52 → 200 over the lead times; plan VALID.

@@ -18,6 +18,7 @@ Back to [[Overview]] · Spec: [[Project Description]] · [[Decisions]]
 | Model | Level | Based on | Idea in one line | Status | Best official profit |
 |---|---|---|---|---|---|
 | [[M0 Baseline]] | L1 (rule) | none | fleetkit's baseline rule: add cars on day 1 up to the history-based need | reference | ? |
+| [[M1 Full Fleet MIP]] | L1–L3 | [[M0 Baseline]] | one MIP for the whole scorer: add/remove, time-space transfers, trucks, upgrades, fare buckets; levels are restrictions of it | idea | — |
 
 **Status values:** `idea` → `wip` → `tested` → `submitted` / `dropped`
 
