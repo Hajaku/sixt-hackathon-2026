@@ -101,7 +101,8 @@ def main() -> None:
     errors = check_validity(inst, run.plan)
 
     b = run.breakdown
-    profit = sum(b.values()) + committed_revenue(inst)
+    costs = b["holding_fleet"] + b["holding_transit"] + b["addition"] + b["driver"] + b["truck"]
+    profit = b["new_revenue"] - costs + committed_revenue(inst)
     print(f"{run.extra['model_id']} L{args.level} [{args.solver}]: {run.status}, objective {run.objective:,.0f}")
     print(
         "plan:", ", ".join(

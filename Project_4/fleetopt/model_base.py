@@ -283,7 +283,7 @@ def build_model(
                         theta[(s, k, d)] = model.add_variable(f"th_{s}_{k}_{d}", cat="Binary")
                         model += (p[(s, k, d)] >= D * theta[(s, k, d)], f"greedy_hi_{s}_{k}_{d}")
                         model += (
-                            p[(s, k, d)] >= a_fr[(s, k, d)] - big_m * (1 - theta[(s, k, d)]),
+                            p[(s, k, d)] >= a_fr[(s, k, d)] - big_m * theta[(s, k, d)],
                             f"greedy_lo_{s}_{k}_{d}",
                         )
                 # own use + cars of this category stepping down to the one below

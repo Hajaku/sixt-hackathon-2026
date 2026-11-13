@@ -51,6 +51,7 @@ Agent instructions for this repo live in `CLAUDE.md` at the repo root.
 - 2026-11-12: agreed on the plan for the day in [[Project Plan]].
 - 2026-11-12: **Level 0 done**: `fleetopt/level0.py` matches all 10 rows of `check_values.csv`; own validity check `fleetopt/evaluate.py` (R5) says do-nothing and baseline are valid. See [[Decisions]].
 - 2026-11-13: wrote out the formulation as [[M1 Full Fleet MIP]] (full scorer as one MIP; levels are restrictions). See [[Decisions]].
+- 2026-11-13: reviewed M1 against an independent scorer: fixed the greedy big-M sign and the profit print in `run_m1.py`. See [[Decisions]].
 - 2026-11-13: exploration notebooks `notebooks/01_base_revenue.ipynb` (base per car-day per station × category) and `notebooks/02_demand_distribution.ipynb` (demand per weekday × station × category, dispersion, pseudo-snapshot demand to come). They use history only, with no future bookings. Takeaways are at the end of each notebook.
 - 2026-11-13: **base revenue done**: `fleetopt.forecast.base_revenue` (cell ratio estimator, tested) plus `scripts/estimate_base_revenue.py` → `estimates/base_revenue.csv`. Findings in [[Base Revenue]].
 - 2026-11-13: demand notebook: rental lengths checked (pooled truncated geometric, independent). Pickups are **not** Poisson: one Gamma shock per cell and calendar week (±13 %), no carry-over, independent across cells. See [[Decisions]].

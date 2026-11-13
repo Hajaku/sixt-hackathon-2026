@@ -3,8 +3,8 @@ tags: [model, project-4]
 model: M1
 level: L1–L3 (restrictions give each level)
 based_on: "[M0 Baseline](M0%20Baseline.md)"
-status: idea
-code: fleetopt/model.py (planned)
+status: implemented
+code: fleetopt/model_base.py, scripts/run_m1.py
 created: 2026-11-13
 ---
 
@@ -60,7 +60,7 @@ $w=1$ is feasible only when $u_s f \ge c$ (then $a^{fr} = u_s f - c$); $w=0$ for
 - capacity: $p_{skd} + q_{s,k-1,d} \le a^{fr}_{skd}$ (own use + cars stepping down to $k-1$; $q_{s,0d}:=0$)
 - unserved: $q_{skd} \le \hat D_{skd} - p_{skd}$
 - greedy "own first", $p_{skd} = \min(\hat D_{skd}, a^{fr}_{skd})$, with big-M $M^a_{skd} \ge \overline{a^{fr}_{skd}}$:
-$$p_{skd} \ge \hat D_{skd}\,\theta_{skd}, \qquad p_{skd} \ge a^{fr}_{skd} - M^a_{skd}\,(1-\theta_{skd})$$
+$$p_{skd} \ge \hat D_{skd}\,\theta_{skd}, \qquad p_{skd} \ge a^{fr}_{skd} - M^a_{skd}\,\theta_{skd}$$
   $\theta=1 \Rightarrow p=\hat D$ (own fully served, leftover capacity may upgrade); $\theta=0 \Rightarrow p=a^{fr}$ (capacity binding, no upgrade out). At the optimum $q_{skd} = \min(\hat D_{skd}-p_{skd},\; a^{fr}_{s,k+1,d}-p_{s,k+1,d})$ — exactly the scorer's $\text{up}[k]$.
 
 **(6) Fare buckets (R8):** $\;\sum_b s_{skdb} = p_{skd} + q_{skd}$ (served, R7 step 3), $\;0 \le s_{skdb} \le \beta_{skdb}$.

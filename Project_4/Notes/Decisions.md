@@ -86,3 +86,9 @@ Back to [[Overview]] · [[Models]] · [[Experiments]]
   - **Allowed:** they may be used to condition the forecast on what is known at day 1. That means the committed car-days $c$ (R1), and the week-1 update $E[G_{s,k,1}\mid n_B]$ in [[Demand]].
 - **Why:** the estimates should describe the demand process from the history alone. Conditioning on information we hold at decision time is legitimate forecasting, not leakage.
 - **Supersedes** the wording "never in an estimator" in the entry "Estimation uses the history only" above. The notebooks are unchanged: they only estimate.
+
+## 2026-11-13: M1 review: greedy big-M sign fixed; LP second stage stays the default for now
+- **Bug:** the R7 greedy constraint read $p \ge a^{fr} - M(1-\theta)$. Then $\theta=1$ forces $p \ge \max(\hat D, a^{fr})$ and $\theta=0$ forces nothing, so the solver set $\theta=0$ everywhere and `exact_greedy` did nothing. **Fixed** to $p \ge a^{fr} - M\theta$ ($\theta=1 \Rightarrow p=\hat D$, $\theta=0 \Rightarrow p=a^{fr}$), in code and in [[M1 Full Fleet MIP]] (no experiments ran against the wrong version).
+- **Also fixed:** `run_m1.py` printed revenue **+** costs as the profit estimate.
+- **Checked** against an independent R6–R11 scorer on the forecast as the scenario: costs match to the euro. With the fix and `--exact-greedy`, the L1 model profit equals the scorer's (3,503,800). Without θ (the default LP second stage), the model overstates new revenue by 0.8 % (L1) to 2.7 % (L2): it diverts category-$k$ capacity from its own demand to $k{-}1$ upgrades when $k{-}1$'s bucket marginal is higher. The scorer also rates the exact-greedy plans higher (L1 +11k, L2 +37k at a 120 s limit).
+- **Open:** exact greedy is slower (L1 ≥ 120 s instead of 17 s). Next: keep θ only on cells where diverting can pay ($\max_b \mu_{k-1,b} > \min_b \mu_{k,b}$) and tighten $M^a$ per cell, then make it the default.
