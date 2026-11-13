@@ -1,0 +1,18 @@
+{
+ "variant": "saa_boot_gurobi",
+ "model_id": "M1",
+ "level": 1,
+ "status": "Optimal",
+ "secs": 53,
+ "objective": 593988.7905768706,
+ "best_bound": 596568.6784968,
+ "gap": 0.00434332761974165,
+ "scenarios": "bootstrap",
+ "block": "network",
+ "n_saa": 10,
+ "seed": 21,
+ "upgrades": true,
+ "solver": "gurobi",
+ "time_limit": 300.0,
+ "valid": true
+}

@@ -1,0 +1,18 @@
+{
+ "variant": "saa_boot",
+ "model_id": "M1",
+ "level": 1,
+ "status": "TimeLimit",
+ "secs": 304,
+ "objective": 582130.0477561159,
+ "best_bound": 712723.1703066648,
+ "gap": 0.2243366805302945,
+ "scenarios": "bootstrap",
+ "block": "network",
+ "n_saa": 10,
+ "seed": 21,
+ "upgrades": true,
+ "solver": "highs",
+ "time_limit": 300.0,
+ "valid": true
+}
