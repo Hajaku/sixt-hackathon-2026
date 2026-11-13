@@ -19,11 +19,13 @@ TEMPLATE = Path(__file__).with_name("fleet_map_template.html")
 DATA_MARKER = "/*__FLEET_MAP_DATA__*/"
 
 
-def daily_breakdown(inst: Instance, plan: pd.DataFrame, demand: pd.DataFrame, base: pd.DataFrame) -> dict:
+def daily_breakdown(inst: Instance, plan: pd.DataFrame, demand: pd.DataFrame, base: pd.DataFrame,
+                    n_single: int = 0) -> dict:
     """Per station and day (categories summed, mean over scenarios), plus the profit per day.
 
     Returns arrays (station, day): fleet, free, demand, served; and (day,): profit and its parts.
     Costs are booked on the day they are caused (transfers on the departure day).
+    `scenarios` holds demand, served and profit of the first `n_single` scenarios one by one.
     """
     cats, days = categories_in_order(inst), n_days(inst)
     t = fleet_with_plan(inst, plan)
@@ -38,7 +40,7 @@ def daily_breakdown(inst: Instance, plan: pd.DataFrame, demand: pd.DataFrame, ba
     stype = inst.stations["station_type"].to_numpy()
     b = base.set_index(["station_id", "category"])["base_revenue"]
     pf = inst.price_factors.sort_values("served_share")
-    rev = np.zeros(free.shape[:2])
+    rev_s = np.zeros((D.shape[0],) + free.shape[:2])                                        # (scenario, station, day)
     for j, k in enumerate(cats):
         for t_ in np.unique(stype):
             g = pf[(pf["station_type"] == t_) & (pf["category"] == k)]
@@ -46,7 +48,8 @@ def daily_breakdown(inst: Instance, plan: pd.DataFrame, demand: pd.DataFrame, ba
             base_s = np.array([b[(s, k)] for s in inst.stations["station_id"].iloc[rows]])[None, :, None]
             r = fare_revenue(served[..., j][:, rows], D[..., j][:, rows], base_s,
                              g["served_share"].to_numpy(float), g["price_factor"].to_numpy(float))
-            rev[rows] += r.mean(axis=0)
+            rev_s[:, rows] += r
+    rev = rev_s.mean(axis=0)
 
     # R9: committed revenue, spread evenly over each rental's car-days in the horizon
     committed = np.zeros(days)
@@ -65,9 +68,11 @@ def daily_breakdown(inst: Instance, plan: pd.DataFrame, demand: pd.DataFrame, ba
             c = plan_costs(inst, plan[plan_day == d])
             action_cost[d - 1] = c["addition_cost"] + c["transfer_cost"]
 
+    single = [{"demand": D[w].sum(-1), "served": served[w].sum(-1),
+               "profit": committed + rev_s[w].sum(0) - holding - action_cost} for w in range(min(n_single, D.shape[0]))]
     return {"fleet": fleet.sum(-1), "free": free.sum(-1), "demand": D.mean(0).sum(-1), "served": served.mean(0).sum(-1),
             "new_revenue": rev.sum(0), "committed_revenue": committed, "holding_cost": holding,
-            "action_cost": action_cost, "profit": committed + rev.sum(0) - holding - action_cost}
+            "action_cost": action_cost, "profit": committed + rev.sum(0) - holding - action_cost, "scenarios": single}
 
 
 def plan_moves(inst: Instance, plan: pd.DataFrame) -> dict[str, list[dict]]:
@@ -91,24 +96,35 @@ def plan_moves(inst: Instance, plan: pd.DataFrame) -> dict[str, list[dict]]:
 
 
 def map_data(inst: Instance, plan: pd.DataFrame, scenarios: pd.DataFrame, base: pd.DataFrame,
-             reference: pd.DataFrame | None = None, reference_label: str = "Do nothing") -> dict:
+             reference: pd.DataFrame | None = None, reference_label: str = "Do nothing", n_single: int = 0) -> dict:
     """Everything the animation needs, as plain lists: `reference` (default do-nothing) vs. `plan`, same scenarios.
 
     `initial` is the state before any plan acts (do-nothing on day 1); both maps start from it.
+    `scenarios` has the first `n_single` scenarios one by one (for the scenario picker), next to the mean.
     """
+    def rounded(x: np.ndarray, digits: int) -> list:
+        return np.round(x, digits).tolist()
+
     nothing = plan.iloc[0:0]
     reference = nothing if reference is None else reference
     out: dict = {"dates": [d.strftime("%Y-%m-%d") for d in horizon_dates(inst)],
                  "stations": inst.stations[["station_id", "station_name", "station_type"]].to_dict("records"),
                  "n_scenarios": int(scenarios["scenario"].nunique()), "ref_label": reference_label, "plans": {}, "totals": {}}
-    b0 = daily_breakdown(inst, nothing, scenarios, base)
-    out["initial"] = {k: np.round(b0[k][:, 0], 2).tolist() for k in ["fleet", "free", "demand", "served"]}
+    b0 = daily_breakdown(inst, nothing, scenarios, base, n_single)
+    out["initial"] = {k: rounded(b0[k][:, 0], 2) for k in ["fleet", "free", "demand", "served"]}
+    out["scenarios"] = [{"label": f"Scenario {w + 1}", "initial": {k: rounded(s[k][:, 0], 1) for k in ["demand", "served"]}}
+                        for w, s in enumerate(b0["scenarios"])]
     for name, p in {"ref": reference, "plan": plan}.items():
-        b = daily_breakdown(inst, p, scenarios, base)
+        b = daily_breakdown(inst, p, scenarios, base, n_single)
         scores = score_plan(inst, p, scenarios, base)
         if not np.isclose(b["profit"].sum(), scores["profit"].mean(), rtol=1e-9):
             raise AssertionError(f"daily profits of '{name}' do not add up to the scorer's mean profit")
-        out["plans"][name] = {k: np.round(v, 2).tolist() for k, v in b.items()} | plan_moves(inst, p)
+        for w, s in enumerate(b.pop("scenarios")):
+            if not np.isclose(s["profit"].sum(), scores["profit"].iloc[w], rtol=1e-9):
+                raise AssertionError(f"daily profits of '{name}' in scenario {w} do not add up to the scorer's profit")
+            out["scenarios"][w][name] = {"demand": rounded(s["demand"], 1), "served": rounded(s["served"], 1),
+                                         "profit": rounded(s["profit"], 0)}
+        out["plans"][name] = {k: rounded(v, 2) for k, v in b.items()} | plan_moves(inst, p)
         row = scores.iloc[0]
         out["totals"][name] = {"profit": float(scores["profit"].mean()),
                                "profit_se": float(scores["profit"].std(ddof=1) / np.sqrt(len(scores))),

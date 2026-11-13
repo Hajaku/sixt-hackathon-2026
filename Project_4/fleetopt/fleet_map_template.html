@@ -32,6 +32,8 @@
   .t-day { font-size: 11px; fill: var(--ink2); text-anchor: middle; }
   .t-daynum { font-size: 13px; font-weight: 600; text-anchor: middle; }
   .station { cursor: default; }
+  select { font: 13px system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: var(--ink); background: var(--surface);
+           border: 1px solid #b9b8b0; border-radius: 6px; padding: 4px 6px; width: 100%; height: 28px; box-sizing: border-box; cursor: pointer; }
   #tip { position: fixed; display: none; pointer-events: none; background: var(--ink); color: #f0efec; font-size: 12.5px;
          line-height: 1.45; padding: 8px 10px; border-radius: 6px; white-space: nowrap; z-index: 5; }
   #tip b { font-weight: 600; } #tip span { color: #c3c2b7; }
@@ -79,9 +81,23 @@ const S = DATA.stations.map(s => s.station_id), sIdx = Object.fromEntries(S.map(
 // balance in [-1, 1]: + = share of available cars left idle, - = share of demand lost
 const bal = (free, dem, srv) => (free > 0.5 ? (free - srv) / free : 0) - (dem > 0 ? (dem - srv) / dem : 0);
 const KEYS = ["ref", "plan"];
-for (const k of KEYS) { const p = DATA.plans[k]; p.balance = p.fleet.map((row, i) => row.map((_, d) => bal(p.free[i][d], p.demand[i][d], p.served[i][d]))); }
 const INIT = DATA.initial;              // the state before any plan acts; both maps start from it
-INIT.balance = INIT.fleet.map((_, i) => bal(INIT.free[i], INIT.demand[i], INIT.served[i]));
+const colSum = m => m[0].map((_, d) => m.reduce((a, row) => a + row[d], 0));
+// what the page shows: the mean over all scenarios (sel = -1) or one scenario; fleet and free capacity do not depend on demand
+function makeView(sel) {
+  const v = {sel, init: {fleet: INIT.fleet}};
+  const src = sel < 0 ? {ref: DATA.plans.ref, plan: DATA.plans.plan, initial: INIT} : DATA.scenarios[sel];
+  v.init.balance = INIT.fleet.map((_, i) => bal(INIT.free[i], src.initial.demand[i], src.initial.served[i]));
+  for (const k of KEYS) {
+    const p = DATA.plans[k], s = src[k];
+    v[k] = {fleet: p.fleet, free: p.free, demand: s.demand, served: s.served, profit: s.profit,
+            balance: p.fleet.map((row, i) => row.map((_, d) => bal(p.free[i][d], s.demand[i][d], s.served[i][d]))),
+            demandDay: colSum(s.demand), servedDay: colSum(s.served)};
+  }
+  return v;
+}
+let VIEW = makeView(-1);
+const total = arr => arr.reduce((a, x) => a + x, 0);
 const atDay = (arr, tau, init) => {     // value shown at time tau: day d's value at mid-day, linear in between;
   if (init !== undefined && tau < 0.5) return lerp(init, arr[0], tau / 0.5);   // before that, from the state before the plan acts
   const x = clamp(tau - 0.5, 0, DAYS - 1), d = Math.floor(x), f = x - d;
@@ -93,8 +109,6 @@ const cumul = (arr, tau) => {           // sum over the days elapsed, the curren
   for (let i = 0; i < d; i++) s += arr[i];
   return d < DAYS ? s + (tau - d) * arr[d] : s;
 };
-const colTotal = key => p => p[key][0].map((_, d) => p[key].reduce((a, row) => a + row[d], 0));
-for (const k of KEYS) { DATA.plans[k].demandDay = colTotal("demand")(DATA.plans[k]); DATA.plans[k].servedDay = colTotal("served")(DATA.plans[k]); }
 function color(v) {
   const to = v >= 0 ? COL.idle : COL.lost, f = Math.pow(Math.min(Math.abs(v), 1), 0.8);
   return "rgb(" + COL.mid.map((m, i) => Math.round(lerp(m, to[i], f))).join(",") + ")";
@@ -116,8 +130,15 @@ function buildMovers(transfers) {
 
 // ---------- static scene ----------
 el("text", {x: 24, y: 38, class: "t-title"}, null, "Where should the cars be? 14 days, 10 stations");
-el("text", {x: 24, y: 55, class: "t-sub"}, null,
-   `Expected values over ${DATA.n_scenarios} demand scenarios (our scorer). Circle area = cars at the station.`);
+const subText = el("text", {x: 24, y: 55, class: "t-sub"});
+const picker = document.createElement("select");
+picker.setAttribute("aria-label", "Demand scenario");
+picker.add(new Option(`Average of ${DATA.n_scenarios} scenarios`, -1));
+DATA.scenarios.forEach((s, i) => {
+  const diff = total(s.plan.profit) - total(s.ref.profit);
+  picker.add(new Option(`${s.label}  (${diff >= 0 ? "+" : "−"}${(Math.abs(diff) / 1e6).toFixed(2)} M)`, i));
+});
+if (DATA.scenarios.length) el("foreignObject", {x: 640, y: 14, width: 210, height: 32}).appendChild(picker);
 
 function buildStrip(key, y, title, subtitle) {
   const g = el("g", {transform: `translate(${STRIP.x},${y})`});
@@ -192,7 +213,7 @@ function updateBtn() {
 const P = PANEL, pw = P.r - P.x;
 const dateText = el("text", {x: P.x, y: 44, class: "t-date"});
 const dayText = el("text", {x: P.r, y: 44, class: "t-sub", "text-anchor": "end"});
-el("text", {x: P.x, y: 84, class: "t-cap"}, null, "EXPECTED PROFIT SO FAR");
+const profitCap = el("text", {x: P.x, y: 84, class: "t-cap"});
 function profitRow(y, label, stroke, width) {
   el("line", {x1: P.x, x2: P.x + 22, y1: y - 6, y2: y - 6, stroke, "stroke-width": width, "stroke-linecap": "round"});
   el("text", {x: P.x + 32, y, class: "t-row"}, null, label);
@@ -203,37 +224,56 @@ el("rect", {x: P.x, y: 164, width: pw, height: 42, rx: 8, fill: cssVar("--region
 el("text", {x: P.x + 14, y: 190, class: "t-row"}, null, "Difference");
 const valDelta = el("text", {x: P.r - 12, y: 194, class: "t-delta"});
 
-// cumulative profit chart
-const CH = {x: P.x + 34, y: 232, w: pw - 46, h: 190};
-const yMax = Math.ceil(Math.max(tp.profit, DATA.totals.ref.profit) / 1e6) * 1e6;
-const cx_ = t => CH.x + t / DAYS * CH.w, cy_ = v => CH.y + CH.h - v / yMax * CH.h;
-for (let d = 0; d < DAYS; d++) if (isWeekend(d)) el("rect", {x: cx_(d), y: CH.y, width: CH.w / DAYS, height: CH.h, fill: cssVar("--region")});
-for (let v = 0; v <= yMax; v += 1e6) {
-  el("line", {x1: CH.x, x2: CH.x + CH.w, y1: cy_(v), y2: cy_(v), stroke: v ? RULE : "#b9b8b0", "stroke-width": 1});
-  el("text", {x: CH.x - 7, y: cy_(v) + 3.5, class: "t-axis", "text-anchor": "end"}, null, v ? (v / 1e6) + " M" : "0");
+// cumulative profit charts: one tall chart for the average; with a scenario picked, the scenario above and the average below
+const yMax = Math.ceil(Math.max(tp.profit, DATA.totals.ref.profit,
+  ...DATA.scenarios.flatMap(s => KEYS.map(k => total(s[k].profit)))) / 1e6) * 1e6;
+function makeChart(y, hgt) {
+  const g = el("g", {}), x0 = P.x + 34, w = pw - 46, step = hgt < 120 ? 2e6 : 1e6;
+  const cx = t => x0 + t / DAYS * w, cy = v => y + hgt - v / yMax * hgt;
+  for (let d = 0; d < DAYS; d++) if (isWeekend(d)) el("rect", {x: cx(d), y, width: w / DAYS, height: hgt, fill: cssVar("--region")}, g);
+  for (let v = 0; v <= yMax; v += step) {
+    el("line", {x1: x0, x2: x0 + w, y1: cy(v), y2: cy(v), stroke: v ? RULE : "#b9b8b0", "stroke-width": 1}, g);
+    el("text", {x: x0 - 7, y: cy(v) + 3.5, class: "t-axis", "text-anchor": "end"}, g, v ? (v / 1e6) + " M" : "0");
+  }
+  for (const d of [0, 6, 13]) el("text", {x: cx(d + 0.5), y: y + hgt + 15, class: "t-axis", "text-anchor": "middle"}, g, `${dates[d].getDate()} ${MON[dates[d].getMonth()]}`);
+  const mkLine = (stroke, sw) => el("path", {fill: "none", stroke, "stroke-width": sw, "stroke-linejoin": "round", "stroke-linecap": "round"}, g);
+  const lines = {ref: mkLine(NOTHING, 2.2), plan: mkLine(INK, 2.6)};
+  const dots = {ref: el("circle", {r: 4.5, fill: NOTHING, stroke: SURFACE, "stroke-width": 2}, g),
+                plan: el("circle", {r: 4.5, fill: INK, stroke: SURFACE, "stroke-width": 2}, g)};
+  function update(profit) {             // profit = {ref: per day, plan: per day}
+    const full = Math.min(Math.floor(tau), DAYS);
+    for (const k of KEYS) {
+      let d = `M${cx(0)},${cy(0)}`;
+      for (let i = 1; i <= full; i++) d += ` L${cx(i).toFixed(1)},${cy(cumul(profit[k], i)).toFixed(1)}`;
+      if (tau > full) d += ` L${cx(tau).toFixed(1)},${cy(cumul(profit[k], tau)).toFixed(1)}`;
+      lines[k].setAttribute("d", d);
+      dots[k].setAttribute("cx", cx(tau)); dots[k].setAttribute("cy", cy(cumul(profit[k], tau)));
+    }
+  }
+  return {g, update};
 }
-for (const d of [0, 6, 13]) el("text", {x: cx_(d + 0.5), y: CH.y + CH.h + 15, class: "t-axis", "text-anchor": "middle"}, null, `${dates[d].getDate()} ${MON[dates[d].getMonth()]}`);
-const lineNothing = el("path", {fill: "none", stroke: NOTHING, "stroke-width": 2.2, "stroke-linejoin": "round", "stroke-linecap": "round"});
-const linePlan = el("path", {fill: "none", stroke: INK, "stroke-width": 2.6, "stroke-linejoin": "round", "stroke-linecap": "round"});
-const dotNothing = el("circle", {r: 4.5, fill: NOTHING, stroke: SURFACE, "stroke-width": 2});
-const dotPlan = el("circle", {r: 4.5, fill: INK, stroke: SURFACE, "stroke-width": 2});
+const chartBig = makeChart(232, 196), chartScen = makeChart(230, 80), chartAvg = makeChart(362, 74);
+const avgCap = el("g", {});
+el("text", {x: P.x, y: 352, class: "t-cap"}, avgCap, `AVERAGE OF ${DATA.n_scenarios} SCENARIOS`);
+const avgVals = el("text", {x: P.r, y: 352, class: "t-small", "text-anchor": "end"}, avgCap);
+const AVG = {ref: DATA.plans.ref.profit, plan: DATA.plans.plan.profit};
 
 // demand served
-el("text", {x: P.x, y: 476, class: "t-cap"}, null, "NEW DEMAND SERVED SO FAR");
+el("text", {x: P.x, y: 480, class: "t-cap"}, null, "NEW DEMAND SERVED SO FAR");
 function servedRow(y, label, fill) {
   el("text", {x: P.x, y: y + 4, class: "t-small"}, null, label);
   el("rect", {x: P.x + 78, y: y - 4, width: pw - 130, height: 8, rx: 4, fill: TRACK});
   return {bar: el("rect", {x: P.x + 78, y: y - 4, width: 0, height: 8, rx: 4, fill}),
           val: el("text", {x: P.r, y: y + 4.5, class: "t-row", "text-anchor": "end", "font-weight": 600})};
 }
-const srvPlan = servedRow(498, "Our plan", INK), srvNothing = servedRow(520, REF, NOTHING);
+const srvPlan = servedRow(501, "Our plan", INK), srvNothing = servedRow(522, REF, NOTHING);
 
 // moves so far
-el("text", {x: P.x, y: 560, class: "t-cap"}, null, "OUR PLAN SO FAR");
-const movesText = el("text", {x: P.x, y: 582, class: "t-row"});
+el("text", {x: P.x, y: 554, class: "t-cap"}, null, "OUR PLAN SO FAR");
+const movesText = el("text", {x: P.x, y: 575, class: "t-row"});
 
 // legend
-const LG = {y: 618};
+const LG = {y: 604};
 const grad = el("linearGradient", {id: "div"}, el("defs", {}));
 for (let i = 0; i <= 10; i++) el("stop", {offset: i * 10 + "%", "stop-color": color(i / 5 - 1)}, grad);
 el("rect", {x: P.x, y: LG.y, width: 136, height: 10, rx: 5, fill: "url(#div)", stroke: "#b9b8b0", "stroke-width": 0.8});
@@ -250,9 +290,9 @@ el("text", {x: P.x, y: 700, class: "t-hint"}, null, "Space: play / pause  ·  �
 // ---------- frame ----------
 let tau = 0, playing = false, last = null;
 function drawStrip(strip) {
-  const p = DATA.plans[strip.key], count = {trucks: 0, trucked: 0, driven: 0, removed: 0, added: 0};
+  const p = VIEW[strip.key], count = {trucks: 0, trucked: 0, driven: 0, removed: 0, added: 0};
   strip.st.forEach((n, i) => {
-    const cars = atDay(p.fleet[i], tau, INIT.fleet[i]), v = atDay(p.balance[i], tau, INIT.balance[i]), r = radius(cars);
+    const cars = atDay(p.fleet[i], tau, INIT.fleet[i]), v = atDay(p.balance[i], tau, VIEW.init.balance[i]), r = radius(cars);
     n.c.setAttribute("r", r.toFixed(2));
     n.c.setAttribute("fill", color(v));
     n.count.textContent = r >= 11 ? Math.round(cars) : "";
@@ -281,12 +321,16 @@ function drawStrip(strip) {
   }
   return count;
 }
-function linePath(arr) {
-  let d = `M${cx_(0)},${cy_(0)}`;
-  const full = Math.min(Math.floor(tau), DAYS);
-  for (let i = 1; i <= full; i++) d += ` L${cx_(i).toFixed(1)},${cy_(cumul(arr, i)).toFixed(1)}`;
-  if (tau > full) d += ` L${cx_(tau).toFixed(1)},${cy_(cumul(arr, tau)).toFixed(1)}`;
-  return d;
+function setScenario(sel) {            // -1 = average over all scenarios
+  VIEW = makeView(sel);
+  const one = sel >= 0, name = one ? DATA.scenarios[sel].label : "";
+  picker.value = sel;
+  subText.textContent = (one ? `${name} of the ${DATA.n_scenarios} demand scenarios of our scorer.`
+                             : `Expected values over ${DATA.n_scenarios} demand scenarios (our scorer).`) + " Circle area = cars at the station.";
+  profitCap.textContent = one ? `PROFIT SO FAR IN ${name.toUpperCase()}` : "EXPECTED PROFIT SO FAR";
+  chartBig.g.setAttribute("visibility", one ? "hidden" : "visible");
+  for (const g of [chartScen.g, chartAvg.g, avgCap]) g.setAttribute("visibility", one ? "visible" : "hidden");
+  draw();
 }
 function draw() {
   drawStrip(stripA);
@@ -295,15 +339,17 @@ function draw() {
   const di = clamp(Math.floor(tau), 0, DAYS - 1), dt = dates[di];
   dateText.textContent = `${WD[dt.getDay()]} ${dt.getDate()} ${MON[dt.getMonth()]}`;
   dayText.textContent = `day ${di + 1} of ${DAYS}`;
-  const pp = cumul(DATA.plans.plan.profit, tau), pn = cumul(DATA.plans.ref.profit, tau);
+  const pp = cumul(VIEW.plan.profit, tau), pn = cumul(VIEW.ref.profit, tau);
   valPlan.textContent = fmtM(pp); valNothing.textContent = fmtM(pn);
   const diff = pp - pn, done = tau >= DAYS;
   valDelta.textContent = (diff >= 0 ? "+" : "−") + fmtM(Math.abs(diff)) + (done ? `  (+${Math.round(diff / pn * 100)} %)` : "");
-  linePlan.setAttribute("d", linePath(DATA.plans.plan.profit)); lineNothing.setAttribute("d", linePath(DATA.plans.ref.profit));
-  dotPlan.setAttribute("cx", cx_(tau)); dotPlan.setAttribute("cy", cy_(pp));
-  dotNothing.setAttribute("cx", cx_(tau)); dotNothing.setAttribute("cy", cy_(pn));
+  if (VIEW.sel < 0) chartBig.update(AVG);
+  else {
+    chartScen.update({ref: VIEW.ref.profit, plan: VIEW.plan.profit}); chartAvg.update(AVG);
+    avgVals.textContent = `${fmtM(cumul(AVG.plan, tau))}  vs.  ${fmtM(cumul(AVG.ref, tau))}`;
+  }
   for (const [row, key] of [[srvPlan, "plan"], [srvNothing, "ref"]]) {
-    const dem = cumul(DATA.plans[key].demandDay, tau), share = dem > 0 ? cumul(DATA.plans[key].servedDay, tau) / dem : 0;
+    const dem = cumul(VIEW[key].demandDay, tau), share = dem > 0 ? cumul(VIEW[key].servedDay, tau) / dem : 0;
     row.bar.setAttribute("width", ((pw - 130) * share).toFixed(1));
     row.val.textContent = dem > 0 ? Math.round(share * 100) + " %" : "–";
   }
@@ -331,7 +377,9 @@ function seek(t) { tau = clamp(t, 0, DAYS); last = null; draw(); }
 
 // ---------- interaction ----------
 btn.addEventListener("click", () => { play(!playing); btn.blur(); });
+picker.addEventListener("change", () => { setScenario(+picker.value); picker.blur(); });
 window.addEventListener("keydown", ev => {
+  if (ev.target === picker) return;      // the dropdown handles its own keys
   if (ev.key === " " || (ev.key === "Enter" && ev.target === btn)) { ev.preventDefault(); play(!playing); }
   else if (ev.key === "ArrowRight") { play(false); seek(Math.floor(tau + 1e-6) + 1); }
   else if (ev.key === "ArrowLeft") { play(false); seek(Math.ceil(tau - 1e-6) - 1); }
@@ -349,11 +397,11 @@ tl.addEventListener("pointerup", () => { dragging = false; });
 
 const tip = document.getElementById("tip");
 function showTip(ev, key, i) {
-  const p = DATA.plans[key], d = clamp(Math.floor(tau), 0, DAYS - 1), s = DATA.stations[i];
+  const p = VIEW[key], d = clamp(Math.floor(tau), 0, DAYS - 1), s = DATA.stations[i];
   const f = v => Math.round(v).toLocaleString("en");
   tip.innerHTML = `<b>${s.station_name}</b> <span>(${s.station_type}, ${key === "plan" ? "our plan" : REF.toLowerCase()}, day ${d + 1})</span><br>` +
     `${f(p.fleet[i][d])} cars at the station<br>${f(p.free[i][d])} available for new rentals<br>` +
-    `${f(p.demand[i][d])} expected new demand<br>${f(p.served[i][d])} served, ${f(p.demand[i][d] - p.served[i][d])} lost`;
+    `${f(p.demand[i][d])} ${VIEW.sel < 0 ? "expected new demand" : "new demand"}<br>${f(p.served[i][d])} served, ${f(p.demand[i][d] - p.served[i][d])} lost`;
   tip.style.display = "block";
   const w = tip.offsetWidth, h = tip.offsetHeight;
   tip.style.left = Math.min(ev.clientX + 14, window.innerWidth - w - 8) + "px";
@@ -361,7 +409,7 @@ function showTip(ev, key, i) {
 }
 function hideTip() { tip.style.display = "none"; }
 
-draw();
+setScenario(-1);
 if (new URLSearchParams(location.search).has("autoplay")) play(true);
 </script>
 </body>

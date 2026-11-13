@@ -2,10 +2,11 @@
 
 Usage: Project_4/.venv/bin/python Project_4/scripts/make_fleet_map.py [plans/final.csv]
        [--reference plans/baseline.csv] [--reference-label Baseline]
-       [--scenarios 500] [--seed 2026] [--out submission/fleet_map.html]
+       [--scenarios 500] [--seed 2026] [--single 30] [--out submission/fleet_map.html]
 
 Writes one self-contained HTML file (open it in a browser; Space plays, arrows step a day).
-The numbers are means over the same seeded scenarios as scripts/score_plans.py.
+The numbers are means over the same seeded scenarios as scripts/score_plans.py; the first `--single`
+of these scenarios can also be picked one by one in the page.
 """
 
 import argparse
@@ -28,6 +29,7 @@ def main() -> None:
     ap.add_argument("--reference-label", default=None, help="its title; default: from the file name")
     ap.add_argument("--scenarios", type=int, default=500)
     ap.add_argument("--seed", type=int, default=2026)
+    ap.add_argument("--single", type=int, default=30, help="scenarios selectable one by one in the page")
     ap.add_argument("--out", type=Path, default=PROJECT / "submission" / "fleet_map.html")
     args = ap.parse_args()
 
@@ -41,7 +43,7 @@ def main() -> None:
     _, base = forecast.model_inputs(inst)
     scen = forecast.sample_demand(inst, args.scenarios, seed=args.seed)
 
-    data = fleetmap.map_data(inst, plan, scen, base, reference=reference, reference_label=label)
+    data = fleetmap.map_data(inst, plan, scen, base, reference=reference, reference_label=label, n_single=args.single)
     data["plan_file"], data["ref_file"], data["seed"] = args.plan.name, args.reference.name, args.seed
     args.out.write_text(fleetmap.render_html(data), encoding="utf-8")
     t = data["totals"]
