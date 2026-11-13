@@ -40,6 +40,7 @@ Project_4/
     evaluate.py      our own re-implementation of the scorer: validity + profit for a plan and a demand scenario
     solvers.py       get_solver(name)
   scripts/           thin entry points, e.g. run_level1.py -> writes plans/<name>.csv
+  estimates/         CSV copies of forecast outputs for reading (code calls fleetopt.forecast directly)
   notebooks/         data exploration only (forecast checks, plots); no logic the pipeline depends on
   plans/             plan CSVs (plans/final.csv = the submitted one)
   tests/             pytest: Level 0 vs check_values.csv, plan validity, small model sanity checks
