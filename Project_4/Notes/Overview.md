@@ -57,3 +57,4 @@ Agent instructions for this repo live in `CLAUDE.md` at the repo root.
 - 2026-11-13: demand notebook: rental lengths checked (pooled truncated geometric, independent). Pickups are **not** Poisson: one Gamma shock per cell and calendar week (±13 %), no carry-over, independent across cells. See [[Decisions]].
 - 2026-11-13: demand findings written up in [[Demand]]. Bookings rule clarified in [[Decisions]]: allowed for conditioning, never in history estimates.
 - 2026-11-13: **forecast done**: `fleetopt.forecast` gives the model inputs (`model_inputs`), seeded demand scenarios (`sample_demand`) and per-week booking updates (−28 % / −21 % backtest MSE). `scripts/make_estimates.py` writes `estimates/`. Routes A and B agree. See [[Demand]].
+- 2026-11-13: **our scorer computes profit** (R6–R11, `fleetopt.evaluate.score_plan`, `scripts/score_plans.py`). Do-nothing 3.03 M, baseline 3.12 M (+97 k ± 0.7 k) on 200 scenarios. See [[Experiments]].

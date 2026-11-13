@@ -86,6 +86,12 @@ $$E[N^d]=\sum_{p=1}^{d}\lambda(s,k,\mathrm{wd}(p))\;P\big(L\ge d-p+1,\ \ell\le p
 - **Precompute** $\bar R_{s,k,d}(f)$ on the integer fleet grid by averaging over N = 200+ scenarios, and use it as a concave piecewise-linear objective. That's **exact SAA at deterministic model size**, and the $\max(0,\cdot)$ is built in.
 - **Non-concave cells** (downtown midsize, about 8 stations × 14 days): an incremental / binary formulation on the integer grid.
 - **Upgrades** couple categories, so the curves are only approximate there. Refinement: a full SAA with explicit upgrade flows over about 20–30 scenarios, *or* an upgrade-aware LP on expected demand. Our scorer decides.
+- [ ] **Compare objectives (added 2026-11-13).** Same model otherwise, plans scored with `scripts/score_plans.py` on the same scenarios (paired SE):
+  1. **Plain buckets** on the point forecast $E[D]$ (what [[M1 Full Fleet MIP]] does now).
+  2. **Expected-revenue curves without upgrades:** $ar R_{s,k,d}(a)$ per cell, from the scenarios.
+  3. **Expected-revenue curves with upgrades:** per (station, day), jointly over the categories, e.g. SAA with explicit upgrade flows.
+
+  Why it matters: profit at $E[D]$ overstates the scenario mean by ≈ 27–30 k (do-nothing and baseline, see [[Experiments]]). Demand is overdispersed (weekly shock, [[Demand]]), so the curves are flatter than the buckets suggest.
 
 ### 4. The IP (first stage, integer)
 - **Variables:**
@@ -102,7 +108,8 @@ $$E[N^d]=\sum_{p=1}^{d}\lambda(s,k,\mathrm{wd}(p))\;P\big(L\ge d-p+1,\ \ell\le p
 
 ### 5. Easy to forget
 - [x] **Level 0** matches `check_values.csv`. Validity depends on it. (`fleetopt/level0.py`, 10/10 rows)
-- [ ] **Our own scorer** `fleetopt/evaluate.py`: R1–R11 exactly (greedy upgrades, truck `ceil`), run on 100+ sampled scenarios. That's how we compare models, since the leaderboard has one scenario.
+- [x] **Our own scorer** `fleetopt/evaluate.py`: R1–R11 exactly (greedy upgrades, truck `ceil`), run on 100+ sampled scenarios. That's how we compare models, since the leaderboard has one scenario.
+  - **Done 2026-11-13:** `score_plan` / `scripts/score_plans.py`; all plans are scored on the same seeded scenarios, with a paired SE for differences. Still to do: check it against the public `.result.md` (milestone below).
 - [ ] **Upload do-nothing + baseline early.** Their `.result.md` sanity-checks the forecast and our scorer.
 
 ## Timeline and roles
@@ -125,5 +132,5 @@ $$E[N^d]=\sum_{p=1}^{d}\lambda(s,k,\mathrm{wd}(p))\;P\big(L\ge d-p+1,\ \ell\le p
 - [ ] M1 valid and above baseline
 - [x] demand routes A and B compared (agree within 0.3 %, see [[Demand]])
 - [ ] M2 (transfers, trucks, upgrades)
-- [ ] M3 (SAA curves, non-concave cells)
+- [ ] M3 (SAA curves, non-concave cells): compare plain buckets vs. curves without and with upgrades (§3)
 - [ ] `final.csv` frozen and uploaded
