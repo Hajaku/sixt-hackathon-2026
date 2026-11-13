@@ -31,4 +31,7 @@ How much do our plans lose because the demand is unknown when the plan is fixed?
 ## Wait-and-see (EVPI proper)
 - **What it does:** `scripts/wait_and_see.py --seed 777 --n 10 --time-limit 45` solves L3 with the exact greedy once per scenario, scores each plan on its own scenario, and saves `plans/wait_and_see_seed777_n10.json`.
 - **EVPI on the sample** = WS − 4,130,592 (`final_point`), or − 4,147,543 against the best single plan.
-- **Status:** started after the hindsight solve, at 16:35. Results: _pending, to be filled in when the run finishes_.
+- **Run:** 16:35–16:43, 10 solves of 46 s each, gaps 1.6–3.3 % at the limit. Each plan's score on its own scenario equals its model value, so the model is exact.
+- **Wait-and-see value:** WS ∈ [4,190,995, 4,221,009]. The lower end is the mean of the incumbents, the upper end the mean of Gurobi's bounds.
+- **EVPI on the sample** (WS minus the best single plan, which lies in [4,147,543, 4,166,474]): **between 25 k and 73 k**, i.e. 0.6–1.8 %.
+- **`final_point` vs. perfect information:** 60–90 k below WS, of which only 17–36 k is due to the plan itself; the rest is the price of not knowing the demand.

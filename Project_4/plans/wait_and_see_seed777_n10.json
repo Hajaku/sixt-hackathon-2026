@@ -1,0 +1,98 @@
+{
+ "seed": 777,
+ "n": 10,
+ "ws_scored": 4190994.6991386293,
+ "ws_bound": 4221009.493826794,
+ "rows": [
+  {
+   "scenario": 0,
+   "status": "TimeLimit",
+   "secs": 46,
+   "gap": 0.01588905923578922,
+   "model_profit": 4380475.126241484,
+   "bound_profit": 4404775.779056095,
+   "scored_profit": 4380475.126241243
+  },
+  {
+   "scenario": 1,
+   "status": "TimeLimit",
+   "secs": 47,
+   "gap": 0.027502763015067478,
+   "model_profit": 4310718.317118076,
+   "bound_profit": 4350862.409136095,
+   "scored_profit": 4310718.317118071
+  },
+  {
+   "scenario": 2,
+   "status": "TimeLimit",
+   "secs": 46,
+   "gap": 0.03273474889198195,
+   "model_profit": 4115061.706064196,
+   "bound_profit": 4156437.836118095,
+   "scored_profit": 4115061.7060642014
+  },
+  {
+   "scenario": 3,
+   "status": "TimeLimit",
+   "secs": 47,
+   "gap": 0.01561733011750043,
+   "model_profit": 4152241.359753172,
+   "bound_profit": 4172562.029251095,
+   "scored_profit": 4152241.3597531733
+  },
+  {
+   "scenario": 4,
+   "status": "TimeLimit",
+   "secs": 46,
+   "gap": 0.020528153859045682,
+   "model_profit": 4146405.9948757505,
+   "bound_profit": 4172996.650148095,
+   "scored_profit": 4146405.9948757393
+  },
+  {
+   "scenario": 5,
+   "status": "TimeLimit",
+   "secs": 46,
+   "gap": 0.015581957356538653,
+   "model_profit": 4172845.593895956,
+   "bound_profit": 4193441.2920150952,
+   "scored_profit": 4172845.593895956
+  },
+  {
+   "scenario": 6,
+   "status": "TimeLimit",
+   "secs": 46,
+   "gap": 0.021542305301335163,
+   "model_profit": 4167375.135101917,
+   "bound_profit": 4195731.170916095,
+   "scored_profit": 4167375.135101917
+  },
+  {
+   "scenario": 7,
+   "status": "TimeLimit",
+   "secs": 46,
+   "gap": 0.03010829988645617,
+   "model_profit": 4136003.7783928,
+   "bound_profit": 4174690.6546400953,
+   "scored_profit": 4136003.778392805
+  },
+  {
+   "scenario": 8,
+   "status": "TimeLimit",
+   "secs": 46,
+   "gap": 0.025398671873602365,
+   "model_profit": 4279862.933880319,
+   "bound_profit": 4316152.1276860945,
+   "scored_profit": 4279862.9338803245
+  },
+  {
+   "scenario": 9,
+   "status": "TimeLimit",
+   "secs": 47,
+   "gap": 0.01960797190383228,
+   "model_profit": 4048957.04606288,
+   "bound_profit": 4072444.989301095,
+   "scored_profit": 4048957.0460628653
+  }
+ ]
+}

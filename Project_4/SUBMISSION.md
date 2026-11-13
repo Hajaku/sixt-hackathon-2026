@@ -103,6 +103,7 @@ All plans are Level 3 and valid by our check. Profit is the mean over 500 evalua
 | Plan | Objective | Solver, time, gap | Profit | vs. final (paired SE) |
 |---|---|---|---:|---:|
 | Upper bound (hindsight, other sample) | SAA solved on exactly 10 test scenarios (seed 777), exact R7 | Gurobi, 480 s, 1.46 % | on those 10: incumbent 4,147,543, bound ≤ 4,166,474; `final_point` 4,130,592 | `final_point` −16,951 (SE 3,410) to the incumbent, ≤ −35,882 to the bound |
+| Wait-and-see (perfect information, same 10 scen.) | one L3 plan per scenario, exact R7 | Gurobi, 46 s each, 1.6–3.3 % | WS ∈ [4,190,995, 4,221,009]; EVPI on the sample 25–73 k (0.6–1.8 %) | `final_point` 60–90 k below WS |
 | **`final_point` (submitted)** | SAA with $\lvert\Omega\rvert = 1$, $D = E[D]$, exact R7 | Gurobi, 300 s, 0.60 % | **4,108,409** | — |
 | `final_saa_20` | SAA, 20 scenarios, exact R7 | Gurobi, 900 s, 3.73 % | 4,098,427 | −9,982 |
 | `final_saa` | SAA, 10 scenarios, exact R7 | Gurobi, 300 s, 3.42 % | 4,095,776 | −12,633 |
