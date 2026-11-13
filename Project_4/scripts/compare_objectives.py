@@ -61,11 +61,12 @@ def solve(args) -> None:
     run = solve_plan(inst, df_mean, df_base, modes=MODES[args.level], solver=args.solver,
                      time_limit=args.time_limit, gap_rel=args.gap, exact_greedy=args.exact_greedy, **kw)
     suffix = "_greedy" if args.exact_greedy else ""
-    stem = PROJECT / "plans" / f"cmp_L{args.level}_{args.variant}{suffix}"
+    name = args.out or f"cmp_L{args.level}_{args.variant}{suffix}"
+    stem = PROJECT / "plans" / name
     write_plan(df_plan=run.plan, path=stem.with_suffix(".csv"))
     info = {"variant": args.variant, "level": args.level, "status": run.status, "secs": round(time.time() - t0),
             "objective": run.objective, "best_bound": run.extra["best_bound"], "gap": run.extra["gap_rel"],
-            "exact_greedy": args.exact_greedy, "solver": args.solver, "n_saa": args.saa_scenarios, "n_more": args.more_scenarios, "time_limit": args.time_limit}
+            "exact_greedy": args.exact_greedy, "solver": args.solver, "plan": name, "n_saa": args.saa_scenarios, "n_more": args.more_scenarios, "time_limit": args.time_limit}
     stem.with_suffix(".json").write_text(json.dumps(info, indent=1))
     print(json.dumps(info))
 
@@ -107,6 +108,8 @@ def main() -> None:
     s.add_argument("--more-scenarios", type=int, default=500)
     s.add_argument("--exact-greedy", action="store_true",
                    help="R7 greedy own-first via binaries theta (exact, slower); plan file gets suffix _greedy")
+    s.add_argument("--out", default=None,
+                   help="plan file stem in plans/ (default cmp_L<level>_<variant>[_greedy]); never overwrite a kept plan")
     c = sub.add_parser("score")
     c.add_argument("--level", type=int, default=1, choices=(1, 2, 3))
     c.add_argument("--eval-scenarios", type=int, default=500)

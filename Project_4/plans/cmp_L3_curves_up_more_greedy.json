@@ -1,0 +1,15 @@
+{
+ "variant": "curves_up_more",
+ "level": 3,
+ "status": "TimeLimit",
+ "secs": 901,
+ "objective": 1164713.945547642,
+ "best_bound": 1170641.335632,
+ "gap": 0.005089138072929063,
+ "exact_greedy": true,
+ "solver": "gurobi",
+ "plan": "cmp_L3_curves_up_more_greedy",
+ "n_saa": 20,
+ "n_more": 500,
+ "time_limit": 900.0
+}

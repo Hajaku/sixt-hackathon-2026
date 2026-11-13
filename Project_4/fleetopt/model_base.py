@@ -206,7 +206,8 @@ def build_model(
     yt: dict[tuple, pulp.LpVariable] = {}
     z: dict[tuple, pulp.LpVariable] = {}
     y_ub = max(cars_k.values()) + max(add_cap.values())
-    z_ub = int(np.ceil(inst.fleet_snapshot.shape[0] / tc.loc["truck", "capacity"]))
+    # no arc-day can carry more cars than exist on the network, additions included
+    z_ub = int(np.ceil((inst.fleet_snapshot.shape[0] + sum(add_cap.values())) / tc.loc["truck", "capacity"]))
     for (s, t), dep_days in arc_days.items():
         for d in dep_days:
             if "truck" in modes:
