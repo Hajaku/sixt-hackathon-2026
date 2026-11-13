@@ -178,3 +178,10 @@ Back to [[Overview]] · [[Models]] · [[Experiments]]
   - The final choice between point and SAA is still open; both lie within the ~25 k tie band of 30 hidden scenarios.
 - **Reproduction:** `scripts/make_final.py --objective point|saa`. It uses Gurobi by default, because Gurobi closes the L3 gaps. Without gurobipy or a license it falls back to HiGHS with a message (`solvers.pick_solver`). gurobipy stays out of `requirements.txt`.
 - **Removed:** `scripts/run_m1.py`. It used the README's placeholder forecast and was superseded by `compare_objectives.py` and `make_final.py`; it is still in git history.
+
+## 2026-11-13: Final plan = `final_point`
+- **Decision:** submit `plans/final_point.csv` (point forecast + exact R7 greedy, L3) as `plans/final.csv`.
+- **Why:** it has the best mean on our 500 evaluation scenarios: 4,108,409, which is +9,982 over SAA N = 20 (paired SE ≈ 0.7 k). It is also the only candidate whose MIP converged (0.6 % gap vs. 3.4–3.7 % for SAA). In `SUBMISSION.md` it is presented as the special case $|\Omega| = 1$, $D = E[D]$ of the SAA model.
+- **Rejected:**
+  - SAA N = 20: within the 30-scenario tie band, but lower on our scenarios and not converged.
+  - Curves + greedy: −47 k.
