@@ -1,0 +1,12 @@
+{
+ "variant": "point",
+ "level": 3,
+ "status": "Optimal",
+ "secs": 159,
+ "objective": 1379720.223933921,
+ "best_bound": 1386292.382617,
+ "gap": 0.004763399542220397,
+ "n_saa": 20,
+ "n_more": 500,
+ "time_limit": 900.0
+}

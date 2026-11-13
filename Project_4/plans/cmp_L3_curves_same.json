@@ -1,0 +1,12 @@
+{
+ "variant": "curves_same",
+ "level": 3,
+ "status": "Optimal",
+ "secs": 1358,
+ "objective": 948737.3079548699,
+ "best_bound": 953458.1245013,
+ "gap": 0.0049758942826929236,
+ "n_saa": 20,
+ "n_more": 500,
+ "time_limit": 900.0
+}
