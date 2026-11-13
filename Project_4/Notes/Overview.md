@@ -21,7 +21,7 @@ Start here: this note maps out the vault and tracks where we stand.
 | [[Models]] | Index of model versions; each version (`Models/M<n> …`) has its own note |
 | [[Experiments]] | One row per evaluated plan: change, solver, profit, validity |
 | [[Decisions]] | Dated decisions with reasoning and the alternatives rejected |
-| [[Demand]] | Findings on the demand process: weekday pattern, rental lengths, weekly Gamma shock, demand to come, implications for the forecast |
+| [[Demand]] | Findings on the demand process: weekday pattern, rental lengths, weekly Gamma shock, demand to come, implications for the forecast, bootstrap cross-check (§6) |
 | [[Base Revenue]] | Findings on base revenue per car-day: estimator, table, multiplicative structure, implications; code in `fleetopt/forecast.py` |
 
 Agent instructions for this repo live in `CLAUDE.md` at the repo root.
@@ -58,3 +58,8 @@ Agent instructions for this repo live in `CLAUDE.md` at the repo root.
 - 2026-11-13: demand findings written up in [[Demand]]. Bookings rule clarified in [[Decisions]]: allowed for conditioning, never in history estimates.
 - 2026-11-13: **forecast done**: `fleetopt.forecast` gives the model inputs (`model_inputs`), seeded demand scenarios (`sample_demand`) and per-week booking updates (−28 % / −21 % backtest MSE). `scripts/make_estimates.py` writes `estimates/`. Routes A and B agree. See [[Demand]].
 - 2026-11-13: **our scorer computes profit** (R6–R11, `fleetopt.evaluate.score_plan`, `scripts/score_plans.py`). Do-nothing 3.03 M, baseline 3.12 M (+97 k ± 0.7 k) on 200 scenarios. See [[Experiments]].
+- 2026-11-13: **objective comparison done** (L1 and L3, 500 scenarios). [[M2 Expected-revenue curves]] with the upgrade split is best: L3 4.00 M, +28 k vs. M1 buckets, +884 k vs. baseline. See [[Experiments]], [[Decisions]].
+- 2026-11-13: **bootstrap scenarios** (`fleetopt/bootstrap.py`, `scripts/run_saa_bootstrap.py`): the classic SAA on replayed history weeks is competitive at L1 (3.42 M with Gurobi, vs. 3.42 M for curves_up). Gurobi as a measuring tool, with a batched build (586 s → 53 s); HiGHS leaves about 8 k at L1 in 300 s. See [[Decisions]], [[Demand]] §6, [[Experiments]].
+- 2026-11-13 14:45: objective comparison round 2 at L3 with Gurobi. **Best: curves + upgrade split from 500 scenarios, 4,011,116** (+25 k vs. point, +893 k vs. baseline). More scenarios cost nothing extra on the grid. SAA runs pending. See [[M2 Expected-revenue curves]].
+- 2026-11-13: **L3 bootstrap SAA** (Gurobi, 0.67 % gap): 4.00 M, −11.5 k vs. curves_up_more (4.01 M, best so far), which also wins on the bootstrap's own scenarios. Parametric scenarios stay. See [[Decisions]], [[Experiments]].
+- 2026-11-13 14:58: **all 14 plans scored on one scale** (500 scenarios), ranking in [[M2 Expected-revenue curves]]. Final candidate unchanged: `plans/cmp_L3_curves_up_more.csv`, 4,011,116.

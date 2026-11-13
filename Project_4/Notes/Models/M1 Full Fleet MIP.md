@@ -88,3 +88,5 @@ A transferred car is in transit on days $d \dots d+\ell_{st}-1$ $\implies$ exact
 
 ## Experiments
 See [Experiments](../Experiments.md) rows that link this note.
+- 2026-11-13: classic SAA mode (`scenarios=`) run on bootstrap scenarios at L1 (`scripts/run_saa_bootstrap.py`): HiGHS 22 % gap in 300 s, Gurobi 0.43 % in 46 s (+8.4 k in our scorer). L3: see the next line.
+- 2026-11-13: L3 classic SAA on 10 bootstrap scenarios, Gurobi 0.67 % gap at 520 s: 3,999,597 on the parametric test set. That is −11.5 k (SE 0.4 k) vs. [[M2 Expected-revenue curves]] curves_up_more, and −10.1 k (SE 1.5 k) on the bootstrap's own 64 week pairs.

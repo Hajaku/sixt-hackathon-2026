@@ -86,10 +86,17 @@ $$E[N^d]=\sum_{p=1}^{d}\lambda(s,k,\mathrm{wd}(p))\;P\big(L\ge d-p+1,\ \ell\le p
 - **Precompute** $\bar R_{s,k,d}(f)$ on the integer fleet grid by averaging over N = 200+ scenarios, and use it as a concave piecewise-linear objective. That's **exact SAA at deterministic model size**, and the $\max(0,\cdot)$ is built in.
 - **Non-concave cells** (downtown midsize, about 8 stations × 14 days): an incremental / binary formulation on the integer grid.
 - **Upgrades** couple categories, so the curves are only approximate there. Refinement: a full SAA with explicit upgrade flows over about 20–30 scenarios, *or* an upgrade-aware LP on expected demand. Our scorer decides.
-- [ ] **Compare objectives (added 2026-11-13).** Same model otherwise, plans scored with `scripts/score_plans.py` on the same scenarios (paired SE):
+- [x] **Compare objectives (added 2026-11-13; done for 1 and 2, and 3 as a deterministic upgrade split — see [[M2 Expected-revenue curves]]).** Same model otherwise, plans scored with `scripts/score_plans.py` on the same scenarios (paired SE):
   1. **Plain buckets** on the point forecast $E[D]$ (what [[M1 Full Fleet MIP]] does now).
   2. **Expected-revenue curves without upgrades:** $ar R_{s,k,d}(a)$ per cell, from the scenarios.
   3. **Expected-revenue curves with upgrades:** per (station, day), jointly over the categories, e.g. SAA with explicit upgrade flows.
+
+  **Result (L3, 500 scenarios):** curves with the upgrade split 4,002,078 > buckets 3,973,822 (+28 k, SE 0.6 k) > curves without upgrades 3,929,427. The buckets overstate their own profit by 244 k. Open: exact upgrades via SAA.
+  **Round 2 (Gurobi, gap 0.5 %, see [[M2 Expected-revenue curves]]):**
+  - curves with upgrade split, 500 scenarios: **4,011,116** (+25 k vs. point, SE 0.5 k), the best so far.
+  - point: 3,985,938.
+  - curves without upgrades: 3,932 k, the same for 20 exact and 500 grid scenarios.
+  - Classic SAA with and without upgrades is still running (a slow PuLP→Gurobi build, now fixed).
 
   Why it matters: profit at $E[D]$ overstates the scenario mean by ≈ 27–30 k (do-nothing and baseline, see [[Experiments]]). Demand is overdispersed (weekly shock, [[Demand]]), so the curves are flatter than the buckets suggest.
 

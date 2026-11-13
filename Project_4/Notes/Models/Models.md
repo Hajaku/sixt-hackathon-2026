@@ -18,7 +18,8 @@ Back to [[Overview]] · Spec: [[Project Description]] · [[Decisions]]
 | Model | Level | Based on | Idea in one line | Status | Best official profit |
 |---|---|---|---|---|---|
 | [[M0 Baseline]] | L1 (rule) | none | fleetkit's baseline rule: add cars on day 1 up to the history-based need | reference | ? |
-| [[M1 Full Fleet MIP]] | L1–L3 | [[M0 Baseline]] | one MIP for the whole scorer: add/remove, time-space transfers, trucks, upgrades, fare buckets; levels are restrictions of it | idea | — |
+| [[M1 Full Fleet MIP]] | L1–L3 | [[M0 Baseline]] | one MIP for the whole scorer: add/remove, time-space transfers, trucks, upgrades, fare buckets; levels are restrictions of it | tested; L3 point 3,985,938, classic SAA on bootstrap scen. 3,999,597 (Gurobi) | — |
+| [[M2 Expected-revenue curves]] | L1–L3 | [[M1 Full Fleet MIP]] | M1 with the revenue as expected-revenue curves over demand scenarios (SAA per cell) instead of buckets at E[D]; variants without and with upgrade split | tested; best: curves_up_more L3, 4,011,116 on our scenarios | — |
 
 **Status values:** `idea` → `wip` → `tested` → `submitted` / `dropped`
 

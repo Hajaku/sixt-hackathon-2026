@@ -107,3 +107,59 @@ Back to [[Overview]] · [[Models]] · [[Experiments]]
   - Route B as the forecast: noisy, 7–8 snapshots per cell-day.
   - Updating only week 1: week-2 bookings carry information on the week-2 factor too.
 - **Not modelled:** variation of base between hidden scenarios. Revenue is linear in base, so it only affects the score spread (see [[Base Revenue]]).
+
+## 2026-11-13: Revenue term: expected-revenue curves with upgrade split (M2 curves_up)
+- **Decision:** the candidate for the final plan is [[M2 Expected-revenue curves]] in the `curves_up` variant. It is M1 with buckets built from $\bar R_{s,k,d}(a)$ over 300 demand scenarios, and with M1's upgrade variables kept.
+- **Why:** on 500 independent evaluation scenarios at L3 it beats M1's point-forecast buckets by +28 k (paired SE 0.6 k) and the baseline by +884 k. At L1 the ranking is the same (+7.8 k, SE 0.2 k).
+  - Its own profit estimate is much closer to the evaluation: +85 k at L3, vs. +244 k for the buckets.
+  - The averaging removes the non-concave cells, so no prefix binaries are needed.
+- **Rejected:**
+  - Curves without upgrades in the model (−44 k at L3): the model can't see that the higher category's spare cars help.
+  - Point-forecast buckets: they ignore the spread of $D$ and chase revenue that doesn't come.
+- **Open:**
+  - L3 hit the 300 s time limit for buckets and curves_up, so check the MIP gap.
+  - Exact upgrades via SAA.
+  - Robustness to the curve seed.
+
+
+## 2026-11-13: Bootstrap scenarios as a second scenario source (check, not yet a choice)
+- **What:** `fleetopt/bootstrap.py` replays the history weeks. Each horizon week $j$ gets one of the 8 history weeks, drawn with replacement and independently for the two weeks. Every rental in that week keeps its weekday, length and lead, and counts as demand to come iff $\text{lead} \le p-1$. `block="network"` uses the same week for every cell, so it keeps the cross-cell correlation of the history; `block="cell"` draws per cell. Script: `scripts/run_saa_bootstrap.py` (SAA solve + scoring on the parametric and the bootstrap test sets).
+- **Why:** it tests whether the plan depends on our parametric demand model (Gamma week factor, iid cells, joint length–lead kernel per station type).
+- **Findings:**
+  - The bootstrap mean matches `expected_demand(booking_update=False)` to within 1 % per day.
+  - The SD of total demand is 206 (network blocks) vs. 244 (cell blocks) vs. 268 (parametric). The history shows no positive cross-cell correlation, so the parametric iid assumption is, if anything, conservative.
+- **Limits:**
+  - No booking update.
+  - Only 64 distinct network scenarios, so scoring the bootstrap plans on them is in-sample.
+- **Open:** the L1 SAA hits the 300 s limit (gap 22 % with upgrades, 7 % without), so compare against the parametric SAA (`compare_objectives.py saa_up`) at equal solve time.
+
+## 2026-11-13: Gurobi as a measuring tool, with a batched model build
+- **Context:** the L1 classic SAA (10 bootstrap scenarios, with upgrades) stops at the HiGHS 300 s limit with a 22 % gap.
+- **Test (asked for by us):** Gurobi 13 on the same model.
+  - It reaches a 0.43 % gap in 46 s.
+  - Its plan scores **+8.4 k** over the HiGHS plan on the 500 parametric evaluation scenarios.
+  - So HiGHS's gap is mostly a weak bound: its incumbent is only about 2 % worse in model objective.
+- **Engineering:** PuLP's `GUROBI` builds the model one variable at a time and looks up each objective coefficient separately: about 540 s of a 586 s run. `fleetopt/solvers.py` now has `_FastGUROBI`, which builds in batches (`addVars` + `addLConstr`). Same objective, 53 s wall. `get_solver("gurobi")` uses it.
+- **Rule unchanged:** the submitted model must solve with HiGHS, and gurobipy stays out of `requirements.txt`. Gurobi plans are reference points that show how much HiGHS leaves on the table at a given time limit.
+- **Rejected:** `pulp.GUROBI_CMD`, because there is no `gurobi_cl` binary in our setup.
+
+## 2026-11-13: Gurobi for the objective experiments; curves from many scenarios on a grid
+- **Gurobi:** allowed by the team for the experiments, because HiGHS couldn't close the L3 gaps in useful time and SAA needs it even more.
+  - The submitted model must still solve with HiGHS. The HiGHS run of the same curves model at L3 (time limit) was within 9 k of the Gurobi plan.
+  - gurobipy stays out of `requirements.txt`.
+- **Curves on a grid:** build the expected-revenue curves from many scenarios (500) on a 20-segment grid, not from the exact kinks of a few scenarios. At L3, N = 20 exact and N = 500 on a grid give the same profit, and the grid builds 9× faster: model size doesn't grow with N.
+- **Candidate for `final.csv`:** `plans/cmp_L3_curves_up_more.csv` (4,011,116 on our 500 scenarios). It is replaced only if SAA with upgrades (still running) is clearly better.
+- **Rejected:** exact-kink curves for production (slow to build, no gain).
+
+
+## 2026-11-13: Bootstrap scenarios: not the scenario source for the final plan
+- **Result (L3, with upgrades):**
+  - The classic SAA on 10 bootstrap scenarios, solved by Gurobi to a 0.67 % gap, scores 3,999,597 on the 500 parametric evaluation scenarios.
+  - That is **−11.5 k (paired SE 0.4 k)** vs. [[M2 Expected-revenue curves]] `curves_up_more`, which is the best plan so far at 4,011,116.
+  - It also loses on the bootstrap's own 64 week pairs: −10.1 k, SE 1.5 k, and in-sample for the bootstrap plan. So the parametric curves plan is better on both scenario laws, not just on its own.
+  - The SAA's own estimate is 158 k optimistic (10 in-sample scenarios), vs. 100 k for curves_up_more.
+- **Reading:**
+  - The gap comes from the number of scenarios (10, vs. 500 behind the curves) and from the missing booking update, not from the scenario law.
+  - The bootstrap's cross-cell correlation hardly matters, since only the marginals enter the expected profit (see [[Demand]] §6).
+- **Decision:** keep the parametric generator (booking update, smooth, as many scenarios as we want). Use the bootstrap only as a robustness check of the final plan: score it on `bootstrap.all_week_pairs`.
+- **Rejected:** a bootstrap SAA with more scenarios. Only 64 distinct network scenarios exist, and the classic SAA grows by one serving block per scenario.

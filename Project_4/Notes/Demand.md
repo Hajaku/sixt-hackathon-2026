@@ -153,3 +153,9 @@ with lengths i.i.d. from $\pi$. Given $G$, $T$ and $D$ are Poisson. Marginally, 
 - **But the marginal is wider than Poisson:** $\mathrm{Var}[D]=\mu(1+v\mu)$, which is ×1.9 at $\mu=50$. That flattens the concave expected-revenue curves $E[\mathrm{rev}](a)$, so the last cars at busy stations are worth less than a Poisson model says.
 - **Scenario generator** (expected-revenue curves, SAA, our own scorer): per cell draw $G_{s,k,1}, G_{s,k,2}$, then Poisson pickups per day and geometric lengths. Rentals from week 1 that are still on rent in week 2 keep their week-1 factor. Condition each $G_{s,k,w}$ on its bookings as above.
 - **Score spread:** the shocks also widen the spread of the 30-scenario mean profit, which matters for the "within 2 SE is a tie" rule.
+
+## 6. Bootstrap cross-check (added 2026-11-13)
+`fleetopt/bootstrap.py` builds model-free scenarios by replaying history weeks: one of the 8 history weeks per horizon week, each rental keeping its weekday, length and lead, and counting as demand to come iff $\ell \le p-1$. See [[Decisions]] for the design.
+- **Mean:** within 1 % per horizon day of $E[D]$ without the booking update. Route A is confirmed once more.
+- **Spread of total demand** (SD of $\sum_{s,k,d} D$): 206 with network blocks (same week for every cell), 244 with cell blocks, 268 for the parametric generator. The history has no positive correlation across cells, so assuming independence is, if anything, conservative.
+- **What it means for the plan:** little, since only the marginals enter the expected profit (see above), plus the upgrade coupling within a station-day. The bootstrap differs mainly in having no booking update and in thinner tails (only 64 distinct network scenarios).
