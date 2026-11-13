@@ -132,6 +132,9 @@ def build_model(
     arcs: Iterable[tuple[str, str]] | None = None,
     prefix_all: bool = False,
     exact_greedy: bool = False,
+    buckets: pd.DataFrame | None = None,
+    upgrades: bool = True,
+    scenarios: list[pd.DataFrame] | None = None,
 ) -> tuple[pulp.LpProblem, dict]:
     """Build the M1 MIP. Levels are restrictions: `modes=()` is L1, drivers only is L2.
 
@@ -143,6 +146,12 @@ def build_model(
     category's free capacity from its own unserved demand to the category below,
     and every plan it yields is valid - settle the difference with fleetopt/evaluate.py
     (see Decisions 2026-11-13).
+    `buckets` replaces the point-forecast buckets, e.g. expected-revenue curves from
+    `fleetopt.fares.expected_revenue_curves`; the most a cell's buckets can absorb then bounds its
+    served demand instead of `df_demand`. `upgrades=False` drops the upgrade variables q.
+    `scenarios` (a list of demand tables like `df_demand`) makes it a classic SAA: one block of
+    serving variables p, q and bucket fills per scenario, buckets at that scenario's D, each block
+    weighted 1/N in the objective; the fleet and the free capacity a_fr are shared.
     Returns the problem and a context dict with the parameters and variables.
     """
     dates = level0.horizon_dates(inst)
@@ -167,7 +176,11 @@ def build_model(
 
     demand_t = _on_grid(inst, df_demand.rename(columns={"demand": "demand_filled"}), ["demand_filled"])
     demand = demand_t.set_index(KEY)["demand_filled"].to_dict()
-    buckets = demand_buckets(inst, df_demand, df_base)
+    if buckets is None:
+        buckets = demand_buckets(inst, df_demand, df_base)
+    else:
+        absorb = buckets.groupby(KEY)["size"].sum()
+        demand = {key: float(absorb.get(key, 0.0)) for key in demand}
 
     # transfer arcs with feasible departure days (a transfer must arrive inside the horizon)
     dist = inst.distances
@@ -246,17 +259,32 @@ def build_model(
             f"rem_cap_{k}",
         )
 
+    # --- second stage: one block per demand scenario (SAA); the point forecast or a bucket
+    # table is the one-block case. Free capacity a_fr depends on the fleet only: shared.
+    if scenarios is None:
+        blocks = [(1.0, demand, buckets)]
+    else:
+        blocks = []
+        for sd in scenarios:
+            dt = _on_grid(inst, sd.rename(columns={"demand": "demand_filled"}), ["demand_filled"])
+            blocks.append((1.0 / len(scenarios), dt.set_index(KEY)["demand_filled"].to_dict(),
+                           demand_buckets(inst, sd, df_base)))
+        demand = {key: sum(w * dem[key] for w, dem, _ in blocks) for key in demand}   # mean, for reporting
+    multi = len(blocks) > 1
+
     # --- serving the demand to come (R6/R7)
     a_fr: dict[tuple, pulp.LpVariable] = {}
     p: dict[tuple, pulp.LpVariable] = {}
     q: dict[tuple, pulp.LpVariable] = {}
     theta: dict[tuple, pulp.LpVariable] = {}
+    big_m_of: dict[tuple, float] = {}
     for s in stations:
         for i, k in enumerate(cats):
             below = cats[i - 1] if i > 0 else None
             for d in days:
-                D = demand[(s, k, d)]
-                needs_capacity = D > 0 or (below is not None and demand[(s, below, d)] > 0)
+                needs_capacity = any(
+                    dem[(s, k, d)] > 0 or (below is not None and dem[(s, below, d)] > 0) for _, dem, _ in blocks
+                )
                 if not needs_capacity:
                     continue
                 # R6 free capacity a_fr = max(0, u_s f - c): the epigraph below is not a
@@ -269,58 +297,69 @@ def build_model(
                 slack_expr = util[s] * f[(s, k, d)] - committed[(s, k, d)]
                 model += (a_fr[(s, k, d)] >= slack_expr, f"afr_lo_{s}_{k}_{d}")
                 big_m = max(0.0, util[s] * (cars_k[k] + add_cap[k]) - committed[(s, k, d)])
+                big_m_of[(s, k, d)] = big_m
                 w = model.add_variable(f"w_{s}_{k}_{d}", cat="Binary")
                 model += (a_fr[(s, k, d)] <= slack_expr + big_m * (1 - w), f"afr_hi_{s}_{k}_{d}")
                 model += (a_fr[(s, k, d)] <= big_m * w, f"afr_zero_{s}_{k}_{d}")
-                if D > 0:
-                    p[(s, k, d)] = model.add_variable(f"p_{s}_{k}_{d}", lowBound=0, upBound=D)
-                    if i < len(cats) - 1:
-                        q[(s, k, d)] = model.add_variable(f"q_{s}_{k}_{d}", lowBound=0, upBound=D)
-                    model += (p[(s, k, d)] + q.get((s, k, d), 0) <= D, f"serve_{s}_{k}_{d}")
-                    if exact_greedy:
-                        # greedy own-first (R7): theta=1 => p=D (leftover capacity may upgrade);
-                        # theta=0 => p=a_fr (own capacity fully used, nothing to upgrade out)
-                        theta[(s, k, d)] = model.add_variable(f"th_{s}_{k}_{d}", cat="Binary")
-                        model += (p[(s, k, d)] >= D * theta[(s, k, d)], f"greedy_hi_{s}_{k}_{d}")
-                        model += (
-                            p[(s, k, d)] >= a_fr[(s, k, d)] - big_m * theta[(s, k, d)],
-                            f"greedy_lo_{s}_{k}_{d}",
-                        )
-                # own use + cars of this category stepping down to the one below
-                terms = [p.get((s, k, d), 0)]
-                if below is not None:
-                    terms.append(q.get((s, below, d), 0))
-                model += (pulp.lpSum(terms) <= a_fr[(s, k, d)], f"capa_{s}_{k}_{d}")
 
-    # --- fare buckets (R8)
+    for o, (_, dem, _) in enumerate(blocks):
+        sfx = f"_w{o}" if multi else ""
+        for s in stations:
+            for i, k in enumerate(cats):
+                below = cats[i - 1] if i > 0 else None
+                for d in days:
+                    if (s, k, d) not in a_fr:
+                        continue
+                    key = (s, k, d, o) if multi else (s, k, d)
+                    D = dem[(s, k, d)]
+                    if D > 0:
+                        p[key] = model.add_variable(f"p_{s}_{k}_{d}{sfx}", lowBound=0, upBound=D)
+                        if upgrades and i < len(cats) - 1:
+                            q[key] = model.add_variable(f"q_{s}_{k}_{d}{sfx}", lowBound=0, upBound=D)
+                        model += (p[key] + q.get(key, 0) <= D, f"serve_{s}_{k}_{d}{sfx}")
+                        if exact_greedy:
+                            # greedy own-first (R7): theta=1 => p=D (leftover capacity may upgrade);
+                            # theta=0 => p=a_fr (own capacity fully used, nothing to upgrade out)
+                            theta[key] = model.add_variable(f"th_{s}_{k}_{d}{sfx}", cat="Binary")
+                            model += (p[key] >= D * theta[key], f"greedy_hi_{s}_{k}_{d}{sfx}")
+                            model += (
+                                p[key] >= a_fr[(s, k, d)] - big_m_of[(s, k, d)] * theta[key],
+                                f"greedy_lo_{s}_{k}_{d}{sfx}",
+                            )
+                    # own use + cars of this category stepping down to the one below
+                    below_key = ((s, below, d, o) if multi else (s, below, d)) if below is not None else None
+                    terms = [p.get(key, 0)]
+                    if below_key is not None:
+                        terms.append(q.get(below_key, 0))
+                    model += (pulp.lpSum(terms) <= a_fr[(s, k, d)], f"capa_{s}_{k}_{d}{sfx}")
+
+    # --- fare buckets (R8), per block; marginal carries the block weight 1/N
     fills: dict[tuple, pulp.LpVariable] = {}
     prefix: dict[tuple, pulp.LpVariable] = {}
-    for cell_key, grp in buckets.groupby(KEY + ["concave"]):
-        s, k, d, concave = cell_key
-        grp = grp.sort_values("bucket")
-        sizes = grp["size"].tolist()
-        cell_fills = []
-        for b, sz in enumerate(sizes, start=1):
-            cell_fills.append(
-                model.add_variable(f"sfill_{s}_{k}_{d}_{b}", lowBound=0, upBound=sz)
-            )
-            fills[(s, k, d, b)] = cell_fills[-1]
-        if prefix_all or not concave:
-            # delta_b = 1 means "bucket b may be used": it forces bucket b-1 to be full first
-            for b in range(2, len(cell_fills) + 1):
-                prefix[(s, k, d, b)] = model.add_variable(f"delta_{s}_{k}_{d}_{b}", cat="Binary")
-                model += (
-                    cell_fills[b - 1] <= sizes[b - 1] * prefix[(s, k, d, b)],
-                    f"prefix_up_{s}_{k}_{d}_{b}",
-                )
-                model += (
-                    cell_fills[b - 2] >= sizes[b - 2] * prefix[(s, k, d, b)],
-                    f"prefix_lo_{s}_{k}_{d}_{b}",
-                )
-        model += (
-            pulp.lpSum(cell_fills) == p[(s, k, d)] + q.get((s, k, d), 0),
-            f"bsum_{s}_{k}_{d}",
-        )
+    marginal: dict[tuple, float] = {}
+    fill_weight: dict[tuple, float] = {}
+    for o, (weight, _, bk) in enumerate(blocks):
+        sfx = f"_w{o}" if multi else ""
+        for cell_key, grp in bk.groupby(KEY + ["concave"]):
+            s, k, d, concave = cell_key
+            grp = grp.sort_values("bucket")
+            sizes = grp["size"].tolist()
+            cell_fills = []
+            for b, (sz, mg) in enumerate(zip(sizes, grp["marginal"]), start=1):
+                fkey = (s, k, d, b, o) if multi else (s, k, d, b)
+                cell_fills.append(model.add_variable(f"sfill_{s}_{k}_{d}_{b}{sfx}", lowBound=0, upBound=sz))
+                fills[fkey] = cell_fills[-1]
+                marginal[fkey] = weight * mg
+                fill_weight[fkey] = weight
+            if prefix_all or not concave:
+                # delta_b = 1 means "bucket b may be used": it forces bucket b-1 to be full first
+                for b in range(2, len(cell_fills) + 1):
+                    pkey = (s, k, d, b, o) if multi else (s, k, d, b)
+                    prefix[pkey] = model.add_variable(f"delta_{s}_{k}_{d}_{b}{sfx}", cat="Binary")
+                    model += (cell_fills[b - 1] <= sizes[b - 1] * prefix[pkey], f"prefix_up_{s}_{k}_{d}_{b}{sfx}")
+                    model += (cell_fills[b - 2] >= sizes[b - 2] * prefix[pkey], f"prefix_lo_{s}_{k}_{d}_{b}{sfx}")
+            pk = (s, k, d, o) if multi else (s, k, d)
+            model += (pulp.lpSum(cell_fills) == p[pk] + q.get(pk, 0), f"bsum_{s}_{k}_{d}{sfx}")
 
     # --- trucks (R10): whole trucks per (origin, destination, departure day)
     for (s, t, d) in z:
@@ -333,7 +372,6 @@ def build_model(
         )
 
     # --- objective (R11 without the constant committed revenue)
-    marginal = buckets.set_index([*KEY, "bucket"])["marginal"].to_dict()
     km = inst.distances.set_index(["from_station_id", "to_station_id"])["distance_km"].to_dict()
     driver_car_cost = {
         a: tc.loc["driver", "fixed_cost"] + tc.loc["driver", "cost_per_km"] * km[a] for a in km
@@ -371,6 +409,8 @@ def build_model(
         "committed": committed,
         "buckets": buckets,
         "marginal": marginal,
+        "fill_weight": fill_weight,
+        "n_scenarios": len(blocks),
         "arc_lead": arc_lead,
         "driver_car_cost": driver_car_cost,
         "truck_load_cost": truck_load_cost,
@@ -396,11 +436,15 @@ def solve_plan(
     msg: bool = False,
     prefix_all: bool = False,
     exact_greedy: bool = False,
+    buckets: pd.DataFrame | None = None,
+    upgrades: bool = True,
+    scenarios: list[pd.DataFrame] | None = None,
 ) -> ModelRun:
     """Build, solve and turn the solution into a plan. Raises if the solver has no solution."""
     model, ctx = build_model(
         inst, df_demand, df_base, modes=modes, arcs=arcs,
-        prefix_all=prefix_all, exact_greedy=exact_greedy,
+        prefix_all=prefix_all, exact_greedy=exact_greedy, buckets=buckets, upgrades=upgrades,
+        scenarios=scenarios,
     )
     stats = model.solve(get_solver(solver, time_limit=time_limit, gap_rel=gap_rel, msg=msg))
     if not stats.has_solution:
@@ -463,8 +507,8 @@ def _extract(ctx: dict, stats) -> ModelRun:
     served = level0.cell_grid(inst)
     served["demand"] = [ctx["demand"][key] for key in cells(served)]
     fill_by_cell: dict[tuple, float] = defaultdict(float)
-    for (s, k, d, b), v in var["fills"].items():
-        fill_by_cell[(s, k, d)] += val(v)
+    for key, v in var["fills"].items():   # (s, k, d, b) or, for SAA, (s, k, d, b, scenario)
+        fill_by_cell[key[:3]] += ctx["fill_weight"][key] * val(v)
     served["served"] = [fill_by_cell[key] for key in cells(served)]
 
     return ModelRun(
@@ -474,7 +518,9 @@ def _extract(ctx: dict, stats) -> ModelRun:
         breakdown=breakdown,
         fleet=fleet,
         served=served,
-        extra={"model_id": ctx["model_id"], "modes": ctx["modes"]},
+        extra={"model_id": ctx["model_id"], "modes": ctx["modes"], "n_scenarios": ctx["n_scenarios"],
+               "best_bound": getattr(stats, "best_bound", None), "gap_rel": getattr(stats, "gap_rel", None),
+               "solve_time": getattr(stats, "time", None)},
     )
 
 
