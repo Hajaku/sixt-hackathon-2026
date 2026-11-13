@@ -18,8 +18,8 @@ Back to [[Overview]]
 - [x] Delete the other project folders, keeping LICENSE, README, runbook, handout and assets
 - [x] Commit and push the removal: `git commit -m "Keep only my project folder" && git push`
 - [x] Repo is **public**, `git remote -v` shows our fork as `origin`, teammates added as collaborators
-- [ ] Every teammate can run `.venv/bin/python starter.py`
-- [ ] Found our **team folder in the shared folder** and the `leaderboard.md`
+- [x] Every teammate can run `.venv/bin/python starter.py`
+- [x] Found our **team folder in the shared folder** and the `leaderboard.md`
 
 ## T−60 min: the plan (60 % of the grade)
 - [ ] Final plan written with `fleetkit.write_plan(...)` (checks the format only, **not** validity)
@@ -37,7 +37,7 @@ Back to [[Overview]]
 
 ## T−45 min: code and reproducibility
 - [ ] All code committed in `Project_4/`
-- [ ] `requirements.txt` up to date (highspy, ipykernel, matplotlib + anything new; **no gurobipy**)
+- [x] `requirements.txt` up to date (highspy, ipykernel, matplotlib + anything new; **no gurobipy**). 2026-11-13: bounds = tested versions, pytest added; fresh venv install + 43 tests pass without gurobipy
 - [ ] One command regenerates `final.csv` from a fresh clone (test it in a clean checkout if there's time)
 - [ ] Final model and plan reproducible with **HiGHS** (open source); if Gurobi was used anywhere, say so in `SUBMISSION.md`
 - [ ] **No secrets in git**: no `.env`, keys or license files (`git status`, check `git log -p` for key-like strings)
