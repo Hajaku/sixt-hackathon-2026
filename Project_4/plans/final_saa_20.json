@@ -1,0 +1,15 @@
+{
+ "variant": "saa_up",
+ "level": 3,
+ "status": "TimeLimit",
+ "secs": 904,
+ "objective": 1244471.0001553465,
+ "best_bound": 1290928.899656,
+ "gap": 0.037331444039157446,
+ "exact_greedy": true,
+ "solver": "gurobi",
+ "plan": "cmp_L3_saa_up_greedy_20",
+ "n_saa": 20,
+ "n_more": 500,
+ "time_limit": 900.0
+}
