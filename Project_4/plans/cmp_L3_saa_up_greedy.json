@@ -1,0 +1,14 @@
+{
+ "variant": "saa_up",
+ "level": 3,
+ "status": "TimeLimit",
+ "secs": 303,
+ "objective": 1249406.8889232653,
+ "best_bound": 1292143.270914,
+ "gap": 0.03420533564335058,
+ "exact_greedy": true,
+ "solver": "gurobi",
+ "n_saa": 10,
+ "n_more": 500,
+ "time_limit": 300.0
+}
