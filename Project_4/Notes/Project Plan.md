@@ -21,6 +21,11 @@ A **valid** `final.csv` with high **mean profit over 30 hidden demand scenarios*
 - **Demand to come is always a round trip.** About 10 % of booked and open rentals are one-way.
 - **Non-concave price factors (the Level 4 trap):** downtown midsize 1.056 → **0.99** → 1.016 at 70 / 80 / 90 %. Marginal revenue per bucket ≈ 1.08, 0.91, **0.53, 1.22**, 0.86 × base. An LP that fills buckets in any order overstates revenue there.
 - Weekly volume is flat, with no obvious trend. Weekday seasonality is still to check.
+- **Update 2026-11-13:** checked in the notebooks.
+  - Weekday seasonality is strong and depends on the station type.
+  - No trend; the weekly level of each cell varies by ±13 %.
+  - Within-cell revenue CV is 0.15.
+  - Details in [[Base Revenue]] and [[Demand]].
 
 ## How the price factors work
 - We **don't set prices**. The scorer models scarcity pricing: $q$ = served / demand, *not* fleet utilization.
@@ -45,6 +50,10 @@ Findings so far: [[Demand]] (weekly Gamma shock, pooled geometric lengths, week-
 $N^d$ = car-days on day d from rentals booked on or after day 1. $B^d$ = committed.
 
 **Why not "mean − committed":** $E[T]-B^d$ is only right if B and N are uncorrelated. Rough check: residual corr(B, N) ≈ **+0.24** (stations, 7-day cutoff, n = 450). So the naive estimate moves the wrong way: high B ⇒ it predicts less to come, while the data suggest more.
+**Update 2026-11-13:**
+- With the Monday pseudo-snapshots the residual correlation is +0.17 (slope +0.14, days 1–7).
+- The cause is the weekly demand shock: a busy week shows up both in what is already booked and in what is still to come.
+- See [[Demand]] §4–5 for the Bayes update of the week-1 level.
 
 **A. Model-based**
 - **Assumptions:** pickups arrive at rate λ(s, k, weekday). Rental length L (car-days, both ends counted) and lead ℓ = pickup − booking have a **joint** distribution per station type × category. We don't assume L ⟂ ℓ.
@@ -60,6 +69,10 @@ $$E[N^d]=\sum_{p=1}^{d}\lambda(s,k,\mathrm{wd}(p))\;P\big(L\ge d-p+1,\ \ell\le p
 - Choose dates $t_0'$ in the history with ≥ 10 days of buffer before and 14 after.
 - For each $t_0'$ and d = 1…14: $N^d$ = cars on rent on $t_0'+d-1$ from rentals booked on or after $t_0'$. Average per (s, k, target weekday, d).
 - No independence assumptions, but noisy: about 4–5 snapshots per weekday alignment.
+- **As built (2026-11-13, [[Demand]] §5):**
+  - Every Monday of the history is a snapshot, since day 1 is a Monday: 8 snapshots for $d\le7$, 7 for $d\ge8$.
+  - $N^d$ needs no buffer: all its rentals are picked up on or after $t_0'$.
+  - Only $B$ needs the 10-day buffer.
 - The same data give β per lead band in $E[N\mid B]=E[N]+\beta\,(B-E[B])$, which shows whether a conditional adjustment is needed.
 
 **Combine**
@@ -107,7 +120,7 @@ $$E[N^d]=\sum_{p=1}^{d}\lambda(s,k,\mathrm{wd}(p))\;P\big(L\ge d-p+1,\ \ell\le p
 ## Milestones
 - [x] Level 0 matches check_values
 - [ ] do-nothing + baseline uploaded, reference profits noted in [[Experiments]]
-- [ ] base-revenue table
+- [x] base-revenue table ([[Base Revenue]], `fleetopt.forecast.base_revenue`)
 - [ ] own scorer agrees with the public `.result.md`
 - [ ] M1 valid and above baseline
 - [ ] demand routes A and B compared
