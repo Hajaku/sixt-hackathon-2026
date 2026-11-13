@@ -2,3 +2,6 @@ numpy>=1.26
 pandas>=2.2
 pandera>=0.20
 pulp[cbc]>=4.2
+highspy>=1.7    # default open-source MIP/LP solver via pulp.HiGHS
+ipykernel>=6    # notebooks (data exploration)
+matplotlib>=3.8 # plots in notebooks
