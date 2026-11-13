@@ -1,8 +1,8 @@
 ---
 tags: [forecast, demand, findings, project-4]
 date: 2026-11-13
-status: findings done, forecast code to do
-code: fleetopt/forecast.py (to do)
+status: done
+code: fleetopt/forecast.py
 notebook: notebooks/02_demand_distribution.ipynb
 ---
 
@@ -12,6 +12,22 @@ Findings on the demand process: pickups, rental lengths, dispersion, and the dem
 Back to [[Overview]] · [[Project Plan]] (§2) · [[Base Revenue]] · [[Decisions]]
 
 **In one line:** pickups are Poisson given one Gamma factor per station × category × calendar week (±13 %). Lengths are one pooled truncated geometric, independent of everything. The weekday pattern depends on the station type. There is no trend, and no correlation between cells.
+
+## How to use it in code
+```python
+from fleetopt import forecast
+df_demand, df_base = forecast.model_inputs(inst)            # drop-in for model_base.build_model / solve_plan
+scen = forecast.sample_demand(inst, 200, seed=2026)          # scenarios for our scorer and SAA
+```
+- `expected_demand(inst)`: $E[D]$ and its sd per (station, category, day).
+- `week_factors(inst)`: Gamma posterior of each cell's weekly factor.
+- `pickup_rates(history_pickups(inst))`: the weekday rates $\lambda$.
+- `to_come_kernel(inst)`: the joint (length, lead) kernel.
+- `weekly_shock_variance(inst)`: $\hat v$.
+- `booking_update_backtest(inst)`: the backtest below.
+- Every function takes `booking_update=True` by default; set it to `False` for the unconditioned forecast.
+- `scripts/make_estimates.py` writes all of it to `estimates/` (`demand_scenarios.csv` is git-ignored, since it is reproducible from the seed).
+- Tests: `tests/test_forecast.py`. Among other things, the scenarios reproduce $E[D]$ by day within 2 %.
 
 ## Data and notation
 - **History:** `completed` + `open` rentals, i.e. every pickup in the 8 weeks before day 1 (Mon 2027-01-04 to Sun 2027-02-28). Day 1 (2027-03-01) is a Monday, so the horizon is exactly two calendar weeks.
@@ -126,11 +142,14 @@ with lengths i.i.d. from $\pi$. Given $G$, $T$ and $D$ are Poisson. Marginally, 
 - **Point forecast:**
   $$E[D_{s,k,d}] = \sum_{p=1}^{d}\lambda_{s,k,\mathrm{wd}(p)}\;P(L\ge d-p+1,\ \ell\le p-1)$$
   (route A in [[Project Plan]]), with plain 8-week weekday means for $\lambda$. Don't weight recent weeks. Optionally use level × type profile.
-- **Week-1 update from the bookings** (Gamma–Poisson conjugacy). Let $n_B$ be the number of week-1 pickups already booked before day 1, and $\mu_B$ its expectation under the model above. Then
-  $$E[G_{s,k,1}\mid n_B] = \frac{1/v + n_B}{1/v + \mu_B},\qquad 1/v \approx 59.$$
-  For example, 40 booked where 30 were expected gives $E[G]\approx1.11$, i.e. +11 % demand to come in week 1. Week 2 stays at 1, since the shocks don't carry over.
-  - [ ] Validate on the pseudo-snapshots: does the update predict $D$ better than the unconditional mean?
+- **Update of each week from its bookings** (Gamma–Poisson conjugacy). Let $n_{B,w}$ be the number of pickups in horizon week $w$ already booked before day 1, and $\mu_{B,w}=\sum_{p\in w}\lambda_p\,P(\ell\ge p)$ its expectation. Then
+  $$G_{s,k,w}\mid n_{B,w} \sim \Gamma\big(1/v + n_{B,w},\ 1/v + \mu_{B,w}\big),\qquad E[G_{s,k,w}\mid n_{B,w}] = \frac{1/v + n_{B,w}}{1/v + \mu_{B,w}},\qquad 1/v \approx 59.$$
+  - **Both weeks are updated.** Week-2 bookings come from the week-2 factor (correction to an earlier remark that week 2 stays at 1). They are fewer (≈ 9 per cell vs. ≈ 37 in week 1), so the update is weaker.
+  - **Bookings vs. the model:** the observed $n_B$ match $\mu_B$ on average (37.3 vs. 37.3 in week 1, 9.4 vs. 9.4 in week 2), which supports $\lambda$ and the lead distribution.
+  - **Posterior means:** 0.91–1.14 across cells; total $E[D]$ 11,931 car-days, vs. 11,918 without the update.
+  - [x] **Validated on the pseudo-snapshots** (`booking_update_backtest`: each Monday as day 1, with the rates estimated without the two predicted weeks). The update lowers the MSE of to-come pickups per cell and week by **28 % in week 1** (103 → 74) and **21 % in week 2** (225 → 177), with no bias.
+- **Route A vs. route B** ([[Project Plan]] §2): the model's $E[D]$ (without the update) and the pseudo-snapshot means agree. Totals are 11,918 vs. 11,952 car-days; per cell-day the correlation is 0.998, the mean relative difference +0.3 %, and every horizon day is within 2 %. So we use route A: it is smooth and gives scenarios.
 - **Only the marginals enter the objective.** The plan is fixed before the horizon, so expected profit is separable over cell-days: $\sum_{s,k,d}E[\mathrm{rev}_{s,k,d}(D_{s,k,d}, a_{s,k,d})]$. Only the marginal of each $D_{s,k,d}$ enters, and upgrades couple only independent categories on the same station and day. So the correlation across days is irrelevant for the expected profit.
 - **But the marginal is wider than Poisson:** $\mathrm{Var}[D]=\mu(1+v\mu)$, which is ×1.9 at $\mu=50$. That flattens the concave expected-revenue curves $E[\mathrm{rev}](a)$, so the last cars at busy stations are worth less than a Poisson model says.
-- **Scenario generator** (expected-revenue curves, SAA, our own scorer): per cell draw $G_{s,k,1}, G_{s,k,2}$, then Poisson pickups per day and geometric lengths. Rentals from week 1 that are still on rent in week 2 keep their week-1 factor. Condition $G_{s,k,1}$ on the bookings as above.
+- **Scenario generator** (expected-revenue curves, SAA, our own scorer): per cell draw $G_{s,k,1}, G_{s,k,2}$, then Poisson pickups per day and geometric lengths. Rentals from week 1 that are still on rent in week 2 keep their week-1 factor. Condition each $G_{s,k,w}$ on its bookings as above.
 - **Score spread:** the shocks also widen the spread of the 30-scenario mean profit, which matters for the "within 2 SE is a tie" rule.

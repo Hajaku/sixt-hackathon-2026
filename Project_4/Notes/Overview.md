@@ -56,3 +56,4 @@ Agent instructions for this repo live in `CLAUDE.md` at the repo root.
 - 2026-11-13: **base revenue done**: `fleetopt.forecast.base_revenue` (cell ratio estimator, tested) plus `scripts/estimate_base_revenue.py` → `estimates/base_revenue.csv`. Findings in [[Base Revenue]].
 - 2026-11-13: demand notebook: rental lengths checked (pooled truncated geometric, independent). Pickups are **not** Poisson: one Gamma shock per cell and calendar week (±13 %), no carry-over, independent across cells. See [[Decisions]].
 - 2026-11-13: demand findings written up in [[Demand]]. Bookings rule clarified in [[Decisions]]: allowed for conditioning, never in history estimates.
+- 2026-11-13: **forecast done**: `fleetopt.forecast` gives the model inputs (`model_inputs`), seeded demand scenarios (`sample_demand`) and per-week booking updates (−28 % / −21 % backtest MSE). `scripts/make_estimates.py` writes `estimates/`. Routes A and B agree. See [[Demand]].

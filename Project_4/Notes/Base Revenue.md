@@ -17,11 +17,12 @@ Back to [[Overview]] · [[Project Plan]] (§1) · [[Decisions]]
 ```python
 from fleetopt.forecast import base_revenue
 b = base_revenue(inst)                      # one row per (station_id, category)
+# or forecast.model_inputs(inst) for (df_demand, df_base) in the model's format
 r_hat = b.set_index(["station_id", "category"])["base"]
 ```
 - Columns: `base` (the chosen method), `base_cell`, `base_multiplicative`, `se`, `n_rentals`, `car_days`.
 - `method="cell"` (default) or `method="multiplicative"`.
-- `scripts/estimate_base_revenue.py` writes the same table to `estimates/base_revenue.csv` for reading. The function is the source of truth.
+- `scripts/make_estimates.py` writes the same table to `estimates/base_revenue.csv` for reading. The function is the source of truth.
 - `tests/test_forecast.py` checks it, and the notebook asserts that it gives the same numbers.
 
 ## Estimator

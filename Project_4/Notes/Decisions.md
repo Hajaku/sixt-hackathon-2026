@@ -92,3 +92,18 @@ Back to [[Overview]] · [[Models]] · [[Experiments]]
 - **Also fixed:** `run_m1.py` printed revenue **+** costs as the profit estimate.
 - **Checked** against an independent R6–R11 scorer on the forecast as the scenario: costs match to the euro. With the fix and `--exact-greedy`, the L1 model profit equals the scorer's (3,503,800). Without θ (the default LP second stage), the model overstates new revenue by 0.8 % (L1) to 2.7 % (L2): it diverts category-$k$ capacity from its own demand to $k{-}1$ upgrades when $k{-}1$'s bucket marginal is higher. The scorer also rates the exact-greedy plans higher (L1 +11k, L2 +37k at a 120 s limit).
 - **Open:** exact greedy is slower (L1 ≥ 120 s instead of 17 s). Next: keep θ only on cells where diverting can pay ($\max_b \mu_{k-1,b} > \min_b \mu_{k,b}$) and tighten $M^a$ per cell, then make it the default.
+
+## 2026-11-13: Forecast implementation: route A, each week conditioned on its bookings
+- **Decision:** `fleetopt.forecast` is the forecast for the model and our scorer.
+  - **Point forecast** (`model_inputs`): $E[D_{s,k,d}]=\sum_{p\le d}E[G_{w(p)}]\,\lambda_{s,k,\mathrm{wd}(p)}\,P(L\ge d-p+1,\ \ell\le p-1)$. It uses plain 8-week weekday means for $\lambda$ and the joint empirical (L, ℓ) kernel per station type × category.
+  - **Scenarios** (`sample_demand`, seeded): weekly Gamma factors, Poisson to-come pickups, lengths from the kernel.
+  - **Booking update:** each horizon week's factor is conditioned on the bookings already made for that week, with Gamma posterior $(1/v+n_B,\ 1/v+\mu_B)$.
+- **Why:**
+  - Route A and route B (pseudo-snapshots) agree: totals within 0.3 %, per cell-day correlation 0.998.
+  - The booking update lowers the backtest MSE of to-come pickups by 28 % (week 1) and 21 % (week 2), using rates estimated without the predicted weeks.
+  - The bookings match the model's prediction on average, so $\lambda$ and the lead distribution are consistent.
+- **Rejected:**
+  - The README's "mean − committed" placeholder in `scripts/run_m1.py`: it ignores the B–D correlation and has no scenarios.
+  - Route B as the forecast: noisy, 7–8 snapshots per cell-day.
+  - Updating only week 1: week-2 bookings carry information on the week-2 factor too.
+- **Not modelled:** variation of base between hidden scenarios. Revenue is linear in base, so it only affects the score spread (see [[Base Revenue]]).

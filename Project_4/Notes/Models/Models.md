@@ -27,5 +27,5 @@ Notation that every version reuses, so the version notes only state what differs
 
 - **Sets:** $S$ stations, $K$ categories (ordered economy < compact < midsize < premium), $D=\{1,\dots,14\}$ days, $B_{s,k,d}$ demand buckets from the fare adjustment
 - **Data (Level 0):** committed car-days $c_{s,k,d}$ (R1); initial fleet $f^0_{s,k}$ (R3); one-way arrivals and departures (R2)
-- **Forecast:** demand to come $\hat D_{s,k,d}$, base revenue per car-day $\hat r_{s,k}$ (`fleetopt.forecast.base_revenue`, see [[Base Revenue]]); demand process in [[Demand]]
+- **Forecast:** demand to come $\hat D_{s,k,d}$, base revenue per car-day $\hat r_{s,k}$ (`fleetopt.forecast.base_revenue`, see [[Base Revenue]]); demand process in [[Demand]]; both as model input via `fleetopt.forecast.model_inputs(inst)`
 - **Parameters:** max utilization $u_s$; holding cost $h_k$; addition cost $a_k$; caps $\bar A_k, \bar R_k$; transfer costs and lead times $\ell_{s,t}$

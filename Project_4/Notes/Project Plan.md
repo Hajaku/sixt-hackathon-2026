@@ -123,7 +123,7 @@ $$E[N^d]=\sum_{p=1}^{d}\lambda(s,k,\mathrm{wd}(p))\;P\big(L\ge d-p+1,\ \ell\le p
 - [x] base-revenue table ([[Base Revenue]], `fleetopt.forecast.base_revenue`)
 - [ ] own scorer agrees with the public `.result.md`
 - [ ] M1 valid and above baseline
-- [ ] demand routes A and B compared
+- [x] demand routes A and B compared (agree within 0.3 %, see [[Demand]])
 - [ ] M2 (transfers, trucks, upgrades)
 - [ ] M3 (SAA curves, non-concave cells)
 - [ ] `final.csv` frozen and uploaded
