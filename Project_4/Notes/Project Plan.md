@@ -31,15 +31,17 @@ A **valid** `final.csv` with high **mean profit over 30 hidden demand scenarios*
 ## Decisions
 
 ### 1. Base revenue: a point estimate
+Done, see [[Base Revenue]].
 - **Why it's directly observable:**
   - README l. 36 defines base as the revenue per car-day "if the company serves all demand".
   - Appendix B l. 282: the history shows demand at the base price, with no demand lost.
   - With R8, $q=1 \Rightarrow$ price factor 1, so historical revenue / car-days = base.
 - **Estimator:** car-day-weighted Σ revenue / Σ car-days per (s, k). Network-wide: economy 254, compact 315, midsize 404, premium 562. Optionally shrink with a multiplicative station × category fit.
 - **Why no stochastic treatment:** revenue is linear in base, so if base ⟂ D the mean is exactly what the expected-profit objective needs. Base is drawn per hidden scenario (l. 233); the history gives its mean.
-- [ ] Check corr(base, daily demand) in the notebook.
+- [x] Check corr(base, daily demand) in the notebook. **Done (2026-11-13, `notebooks/01_base_revenue.ipynb`):** ≈ 0 (+0.04 weekly, +0.01 daily). There are no week or day price shocks beyond per-rental noise, and base is multiplicative $\alpha_s\beta_k$ to within 1.6 %.
 
 ### 2. Demand to come $E[N^d]$: two routes, cross-checked
+Findings so far: [[Demand]] (weekly Gamma shock, pooled geometric lengths, week-1 update from the bookings).
 $N^d$ = car-days on day d from rentals booked on or after day 1. $B^d$ = committed.
 
 **Why not "mean − committed":** $E[T]-B^d$ is only right if B and N are uncorrelated. Rough check: residual corr(B, N) ≈ **+0.24** (stations, 7-day cutoff, n = 450). So the naive estimate moves the wrong way: high B ⇒ it predicts less to come, while the data suggest more.
@@ -52,6 +54,7 @@ $$E[N^d]=\sum_{p=1}^{d}\lambda(s,k,\mathrm{wd}(p))\;P\big(L\ge d-p+1,\ \ell\le p
 - **Joint P(L ≥ a, ℓ ≤ b):** the empirical fraction of historical rentals with L ≥ a and ℓ ≤ b, per station type × category (n ≈ 1,100–7,300 per group). There's no truncation bias: the sample is every pickup in the 8-week window, whatever its L or ℓ, since open rentals are added back. For scenarios, sample (L, ℓ) **pairs** from the same group.
 - **Check (2026-11-13, see [[Decisions]]):** in this data, L and ℓ are practically independent (Spearman −0.002 overall; the joint/product ratio of the probabilities above is within 1 %). What does matter is the **station type**: mean lead is 3.9–4.2 d at airports vs. 4.6–4.9 d downtown. So the grouping matters more than the joint estimate. We keep the joint one anyway, because it costs nothing and needs no assumption. Recheck per station if the counts allow.
 - **Scenarios:** Poisson or NegBin pickups, then sample one (L, ℓ) pair for each from the joint empirical distribution of its group. This is the generator for the expected-revenue curves and for our own scorer.
+  - **Update (2026-11-13, `notebooks/02_demand_distribution.ipynb` §3–4, see [[Decisions]]):** pickups are $\mathrm{Poisson}(G_{s,k,w}\lambda_{s,k,\mathrm{wd}})$, with one Gamma factor per cell and calendar week ($E=1$, $\mathrm{Var}\approx0.017$, i.e. ±13 %), i.i.d. across weeks and cells. Lengths are one pooled truncated geometric ($q\approx0.70$) and independent of everything.
 
 **B. Empirical pseudo-snapshots**
 - Choose dates $t_0'$ in the history with ≥ 10 days of buffer before and 14 after.
