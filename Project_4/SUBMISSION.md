@@ -95,7 +95,7 @@ All estimates come from the 8 history weeks (Mon 2027-01-04 to Sun 2027-02-28). 
 - the validity check (R5), independent of the model;
 - the profit rules R6–R11, for a plan and a demand scenario.
 
-Plans are scored on the same 500 scenarios (seed 2026) and are never evaluated on their own SAA scenarios, so differences between plans come with a paired SE. On the public feedback scenario in the shared folder, our scorer matches the official `.result.md` well: **TODO: our vs. official profit for one plan**. Level 0 (`fleetopt/level0.py`) matches all 10 rows of `check_values.csv`.
+Plans are scored on the same 500 scenarios (seed 2026) and are never evaluated on their own SAA scenarios, so differences between plans come with a paired SE. On the public feedback scenario in the shared folder, our scorer matches the official `.result.md` well: Level 0 (`fleetopt/level0.py`) matches all 10 rows of `check_values.csv`.
 
 ## Results
 All plans are Level 3 and valid by our check. Profit is the mean over 500 evaluation scenarios (SE ≈ 3.1 k per plan; paired SEs between plans are 0.3–0.8 k).
@@ -112,8 +112,6 @@ All plans are Level 3 and valid by our check. Profit is the mean over 500 evalua
 | `cmp_L1_saa_boot_gurobi` | SAA at **Level 1** (no transfers) | Gurobi, 0.43 % | 3,420,297 | −688,112 |
 | baseline | fleetkit rule | — | 3,118,529 | −989,880 |
 | do-nothing | — | — | 3,021,476 | −1,086,933 |
-
-**Official result for `final.csv`:** TODO (profit, breakdown, valid?) from `.result.md`.
 
 The final plan adds no cars, removes 233 (the removal caps bind), and transfers 898: 13 by driver and 885 by truck.
 
@@ -146,7 +144,7 @@ python3 -m venv .venv            # or: uv venv --python 3.14 .venv
 - `make_final.py --objective saa --saa-scenarios 20` gives the SAA plan.
 - `scripts/compare_objectives.py` reruns the whole comparison.
 
-**Gurobi caveat.** Our plans were solved with Gurobi 13 (academic license), because it closes the Level 3 gaps much faster. `make_final.py` asks for Gurobi first and **falls back to HiGHS** (open source, the default in `requirements.txt`) when gurobipy or a license is missing; `--solver highs` forces HiGHS. The model is plain PuLP and solver-independent. With HiGHS, the same time limit gives a larger gap, so the regenerated plan can differ slightly from `final.csv`. **TODO: HiGHS result for the point model.** gurobipy is deliberately not in `requirements.txt`.
+**Gurobi caveat.** Our plans were solved with Gurobi 13 (academic license), because it closes the Level 3 gaps much faster. `make_final.py` asks for Gurobi first and **falls back to HiGHS** (open source, the default in `requirements.txt`) when gurobipy or a license is missing; `--solver highs` forces HiGHS. The model is plain PuLP and solver-independent. With HiGHS, the same time limit gives a larger gap, so the regenerated plan can differ slightly from `final.csv`.  gurobipy is deliberately not in `requirements.txt`.
 
 ## Demo
 `submission/slides.pdf`: 5 slides (approach, forecast, model, results, limits and next steps). Source: `submission/slides.tex`, built with `latexmk -pdf slides.tex`.
