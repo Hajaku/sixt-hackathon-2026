@@ -163,3 +163,18 @@ Back to [[Overview]] · [[Models]] · [[Experiments]]
   - The bootstrap's cross-cell correlation hardly matters, since only the marginals enter the expected profit (see [[Demand]] §6).
 - **Decision:** keep the parametric generator (booking update, smooth, as many scenarios as we want). Use the bootstrap only as a robustness check of the final plan: score it on `bootstrap.all_week_pairs`.
 - **Rejected:** a bootstrap SAA with more scenarios. Only 64 distinct network scenarios exist, and the classic SAA grows by one serving block per scenario.
+
+## 2026-11-13: Exact R7 greedy in the final model; final between point and SAA
+- **Finding:**
+  - The exact greedy binaries θ are worth about +100 k at L3: `point_greedy` scores 4,108,409, against 4,011,116 for the best plan without them.
+  - Without θ the model splits capacity between own demand and upgrades in a way the scorer never does, so the plan is built for a split that does not happen.
+  - This gain is far larger than curves vs. point (+25 k).
+- **Spec audit (subagent):** the model matches R1–R11. Drivers are allowed at L2/L3 but cost more than trucks from 5 cars up. Trucks use the ceil rule ($\sum_k y \le 8z$, $z$ integer). Only a loose upper bound on $z$ was fixed.
+- **Candidates:**
+  - `point` + greedy: 4,108,409, gap 0.6 %.
+  - SAA (N = 20) + greedy: 4,098,427, gap 3.7 % after 900 s.
+  - SAA (N = 10) + greedy: 4,095,776.
+  - Curves + greedy: 4,060,965. The greedy threshold $\max_\omega D^\omega$ is too pessimistic about upgrades.
+  - The final choice between point and SAA is still open; both lie within the ~25 k tie band of 30 hidden scenarios.
+- **Reproduction:** `scripts/make_final.py --objective point|saa`. It uses Gurobi by default, because Gurobi closes the L3 gaps. Without gurobipy or a license it falls back to HiGHS with a message (`solvers.pick_solver`). gurobipy stays out of `requirements.txt`.
+- **Removed:** `scripts/run_m1.py`. It used the README's placeholder forecast and was superseded by `compare_objectives.py` and `make_final.py`; it is still in git history.

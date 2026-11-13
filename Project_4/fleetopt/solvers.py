@@ -1,10 +1,13 @@
 """One place where a solver name becomes a PuLP solver ([[Decisions]]).
 
-The submission must run open source: `highs` is the default, `cbc` the fallback.
-`gurobi` is here as an escape hatch only (never in requirements.txt, use after we agree).
+The submission must run open source. `highs` is the open-source default and `cbc` the
+fallback. `gurobi` is faster on the L3 models (it is what produced our plans), so the final
+script asks for it first, but gurobipy is never in requirements.txt: `pick_solver` falls back
+to HiGHS with a message when gurobipy or a license is missing.
 """
 
 import math
+import sys
 
 import pulp
 from pulp import constants
@@ -66,6 +69,32 @@ class _FastGUROBI(pulp.GUROBI):
             constr_handles.append(m.addLConstr(gp.LinExpr(coefs, gvars), sense[c.sense], -c.constant, name=c.name))
         m.update()
         return var_handles, constr_handles
+
+
+def gurobi_available() -> tuple[bool, str]:
+    """Whether gurobipy imports and a license lets it build a model; the reason if not."""
+    try:
+        import gurobipy as gp
+    except ImportError:
+        return False, "gurobipy is not installed"
+    try:
+        with gp.Env(params={"OutputFlag": 0}) as env, gp.Model(env=env):
+            pass
+    except gp.GurobiError as exc:
+        return False, f"no usable Gurobi license ({exc})"
+    return True, ""
+
+
+def pick_solver(name: str) -> str:
+    """The solver name to use: `name`, or highs when Gurobi is asked for but not usable."""
+    if name.lower() != "gurobi":
+        return name.lower()
+    ok, why = gurobi_available()
+    if ok:
+        return "gurobi"
+    print(f"NOTE: Gurobi requested but {why}; falling back to HiGHS (open source). "
+          "Expect a larger MIP gap at the same time limit.", file=sys.stderr)
+    return "highs"
 
 
 def get_solver(
