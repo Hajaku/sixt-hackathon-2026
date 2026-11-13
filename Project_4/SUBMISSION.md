@@ -102,7 +102,7 @@ All plans are Level 3 and valid by our check. Profit is the mean over 500 evalua
 
 | Plan | Objective | Solver, time, gap | Profit | vs. final (paired SE) |
 |---|---|---|---:|---:|
-| Upper bound | **TODO** | | | |
+| Upper bound (hindsight, other sample) | SAA solved on exactly 10 test scenarios (seed 777), exact R7 | Gurobi, 480 s, 1.46 % | on those 10: incumbent 4,147,543, bound ≤ 4,166,474; `final_point` 4,130,592 | `final_point` −16,951 (SE 3,410) to the incumbent, ≤ −35,882 to the bound |
 | **`final_point` (submitted)** | SAA with $\lvert\Omega\rvert = 1$, $D = E[D]$, exact R7 | Gurobi, 300 s, 0.60 % | **4,108,409** | — |
 | `final_saa_20` | SAA, 20 scenarios, exact R7 | Gurobi, 900 s, 3.73 % | 4,098,427 | −9,982 |
 | `final_saa` | SAA, 10 scenarios, exact R7 | Gurobi, 300 s, 3.42 % | 4,095,776 | −12,633 |
@@ -149,7 +149,7 @@ python3 -m venv .venv            # or: uv venv --python 3.14 .venv
 **Gurobi caveat.** Our plans were solved with Gurobi 13 (academic license), because it closes the Level 3 gaps much faster. `make_final.py` asks for Gurobi first and **falls back to HiGHS** (open source, the default in `requirements.txt`) when gurobipy or a license is missing; `--solver highs` forces HiGHS. The model is plain PuLP and solver-independent. With HiGHS, the same time limit gives a larger gap, so the regenerated plan can differ slightly from `final.csv`. **TODO: HiGHS result for the point model.** gurobipy is deliberately not in `requirements.txt`.
 
 ## Demo
-`submission/slides.pdf` (TODO)
+`submission/slides.pdf`: 5 slides (approach, forecast, model, results, limits and next steps). Source: `submission/slides.tex`, built with `latexmk -pdf slides.tex`.
 
 ## Next steps
 - **Dynamic plans:** re-solve daily as bookings arrive (rolling horizon), using the booking update we already have.

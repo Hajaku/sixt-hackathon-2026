@@ -1,0 +1,9 @@
+{
+ "seed": 777,
+ "n": 10,
+ "status": "TimeLimit",
+ "secs": 483,
+ "gap": 0.014602115355047948,
+ "incumbent_profit": 4147542.5875343336,
+ "bound_profit": 4166473.686602095
+}

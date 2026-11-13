@@ -21,6 +21,7 @@ Start here: this note maps out the vault and tracks where we stand.
 | [[Models]] | Index of model versions; each version (`Models/M<n> …`) has its own note |
 | [[Experiments]] | One row per evaluated plan: change, solver, profit, validity |
 | [[Decisions]] | Dated decisions with reasoning and the alternatives rejected |
+| [[Value of Perfect Info]] | Hindsight bounds: final plans vs. the best single plan on a fresh sample, plus wait-and-see (EVPI) |
 | [[Demand]] | Findings on the demand process: weekday pattern, rental lengths, weekly Gamma shock, demand to come, implications for the forecast, bootstrap cross-check (§6) |
 | [[Base Revenue]] | Findings on base revenue per car-day: estimator, table, multiplicative structure, implications; code in `fleetopt/forecast.py` |
 
@@ -67,3 +68,4 @@ Agent instructions for this repo live in `CLAUDE.md` at the repo root.
 - 2026-11-13 16:03: fourth candidate `plans/final_saa_20.csv` (= `cmp_L3_saa_up_greedy_20`, SAA N = 20 with exact greedy, 4,098,427, −10 k vs. `final_point`). See [[Experiments]].
 - 2026-11-13 16:13: **reproduction script** `scripts/make_final.py --objective point|saa` (Gurobi, falls back to HiGHS), plan index `plans/README.md`, `run_m1.py` removed. See [[Decisions]].
 - 2026-11-13 16:25: **final plan chosen**: `plans/final.csv` = `final_point` (valid by our check). First draft of `Project_4/SUBMISSION.md`, with TODOs for the official numbers, the upper bound, the HiGHS run and the slides. See [[Decisions]].
+- 2026-11-13 16:35: [[Value of Perfect Info]]: on 10 fresh scenarios `final_point` is 17 k below the hindsight-optimal single plan (bound: ≤ 36 k). Wait-and-see run pending.
