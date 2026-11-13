@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fleet map: 14 days of rebalancing</title>
+<!-- Template for scripts/make_fleet_map.py, which inlines the data below. Do not edit submission/fleet_map.html by hand. -->
+<style>
+  :root {
+    --surface: #fcfcfb; --region: #f3f2ee; --ink: #0b0b0b; --ink2: #52514e; --ink3: #8a8983;
+    --rule: #dddcd5; --track: #eceae4; --nothing: #9a9992;
+  }
+  html, body { margin: 0; height: 100%; background: var(--surface); overflow: hidden; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: var(--ink); }
+  svg { display: block; width: 100vw; height: 100vh; user-select: none; -webkit-user-select: none; }
+  text { font-variant-numeric: tabular-nums; }
+  .t-title { font-size: 22px; font-weight: 700; }
+  .t-sub { font-size: 12.5px; fill: var(--ink2); }
+  .t-cap { font-size: 10.5px; letter-spacing: 1.3px; fill: var(--ink3); font-weight: 600; }
+  .t-strip { font-size: 20px; font-weight: 700; }
+  .halo { paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+  .t-station { font-size: 11.5px; fill: var(--ink2); text-anchor: middle; }
+  .t-count { font-size: 10.5px; font-weight: 600; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+  .t-pop { font-size: 13px; font-weight: 700; fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+  .t-date { font-size: 34px; font-weight: 700; }
+  .t-row { font-size: 15px; }
+  .t-val { font-size: 24px; font-weight: 700; text-anchor: end; }
+  .t-delta { font-size: 26px; font-weight: 700; text-anchor: end; }
+  .t-axis { font-size: 10.5px; fill: var(--ink3); }
+  .t-small { font-size: 12px; fill: var(--ink2); }
+  .t-hint { font-size: 10.5px; fill: var(--ink3); }
+  .t-day { font-size: 11px; fill: var(--ink2); text-anchor: middle; }
+  .t-daynum { font-size: 13px; font-weight: 600; text-anchor: middle; }
+  .station { cursor: default; }
+  #tip { position: fixed; display: none; pointer-events: none; background: var(--ink); color: #f0efec; font-size: 12.5px;
+         line-height: 1.45; padding: 8px 10px; border-radius: 6px; white-space: nowrap; z-index: 5; }
+  #tip b { font-weight: 600; } #tip span { color: #c3c2b7; }
+</style>
+</head>
+<body>
+<svg id="stage" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid meet" role="img"
+     aria-label="Animated map of the fleet over 14 days: a reference plan compared with our plan"></svg>
+<div id="tip"></div>
+<script>
+const DATA = /*__FLEET_MAP_DATA__*/;
+
+// ---------- layout (schematic: the three cities are 80-290 km apart, stations within a city 1-10 km) ----------
+const POS = {S01: [150, 178], S02: [268, 92], S03: [68, 98], S04: [166, 56], S05: [292, 204],
+             S06: [540, 176], S07: [420, 212], S08: [432, 122], S09: [682, 76], S10: [760, 168]};
+const REGIONS = [["MARLOW", 12, 12, 340, 248], ["DUNMERE", 366, 72, 248, 188], ["HIGHVALE", 630, 12, 180, 216]];
+const STRIP = {x: 20, w: 830, h: 270, yA: 62, yB: 340};
+const TL = {x: 78, y: 632, w: 772, h: 46};
+const BTN = {x: 44, y: 655, r: 23};
+const PANEL = {x: 884, r: 1256};
+const SEC_PER_DAY = 1.7, DAYS = DATA.dates.length;
+const COL = {mid: [240, 239, 236], idle: [38, 99, 196], lost: [212, 58, 42]};
+const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const dates = DATA.dates.map(s => new Date(s + "T12:00:00"));
+const isWeekend = d => [0, 6].includes(dates[d].getDay());
+
+const NS = "http://www.w3.org/2000/svg", stage = document.getElementById("stage");
+function el(tag, attrs, parent, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text !== undefined) e.textContent = text;
+  (parent || stage).appendChild(e);
+  return e;
+}
+const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const INK = cssVar("--ink"), SURFACE = cssVar("--surface"), RULE = cssVar("--rule"), TRACK = cssVar("--track"), NOTHING = cssVar("--nothing");
+const lerp = (a, b, f) => a + (b - a) * f;
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const smooth = p => p * p * (3 - 2 * p);
+const fmtM = v => "€" + (v / 1e6).toFixed(2) + " M";
+const radius = cars => 1.25 * Math.sqrt(Math.max(cars, 0));
+
+// ---------- derived data ----------
+const S = DATA.stations.map(s => s.station_id), sIdx = Object.fromEntries(S.map((s, i) => [s, i]));
+// balance in [-1, 1]: + = share of available cars left idle, - = share of demand lost
+const bal = (free, dem, srv) => (free > 0.5 ? (free - srv) / free : 0) - (dem > 0 ? (dem - srv) / dem : 0);
+const KEYS = ["ref", "plan"];
+for (const k of KEYS) { const p = DATA.plans[k]; p.balance = p.fleet.map((row, i) => row.map((_, d) => bal(p.free[i][d], p.demand[i][d], p.served[i][d]))); }
+const INIT = DATA.initial;              // the state before any plan acts; both maps start from it
+INIT.balance = INIT.fleet.map((_, i) => bal(INIT.free[i], INIT.demand[i], INIT.served[i]));
+const atDay = (arr, tau, init) => {     // value shown at time tau: day d's value at mid-day, linear in between;
+  if (init !== undefined && tau < 0.5) return lerp(init, arr[0], tau / 0.5);   // before that, from the state before the plan acts
+  const x = clamp(tau - 0.5, 0, DAYS - 1), d = Math.floor(x), f = x - d;
+  return d + 1 < DAYS ? lerp(arr[d], arr[d + 1], f) : arr[d];
+};
+const cumul = (arr, tau) => {           // sum over the days elapsed, the current day pro rata
+  const d = Math.min(Math.floor(tau), DAYS);
+  let s = 0;
+  for (let i = 0; i < d; i++) s += arr[i];
+  return d < DAYS ? s + (tau - d) * arr[d] : s;
+};
+const colTotal = key => p => p[key][0].map((_, d) => p[key].reduce((a, row) => a + row[d], 0));
+for (const k of KEYS) { DATA.plans[k].demandDay = colTotal("demand")(DATA.plans[k]); DATA.plans[k].servedDay = colTotal("served")(DATA.plans[k]); }
+function color(v) {
+  const to = v >= 0 ? COL.idle : COL.lost, f = Math.pow(Math.min(Math.abs(v), 1), 0.8);
+  return "rgb(" + COL.mid.map((m, i) => Math.round(lerp(m, to[i], f))).join(",") + ")";
+}
+
+// one moving marker per truck (up to 8 cars) or per driven car
+function buildMovers(transfers) {
+ const movers = [];
+ for (const t of transfers) {
+  const [x0, y0] = POS[t.from], [x1, y1] = POS[t.to], dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy);
+  const off = Math.min(0.16 * len, 34), cx = (x0 + x1) / 2 - dy / len * off, cy = (y0 + y1) / 2 + dx / len * off;
+  const gap = Math.min(0.07, 0.55 / t.units);
+  for (let i = 0; i < t.units; i++)
+    movers.push({mode: t.mode, t0: t.day - 1 + i * gap, t1: t.day - 1 + i * gap + t.lead, x0, y0, x1, y1, cx, cy,
+                 cars: t.mode === "truck" ? Math.min(8, t.cars - 8 * i) : 1, key: t.from + ">" + t.to});
+ }
+ return movers.sort((a, b) => a.t0 - b.t0);
+}
+
+// ---------- static scene ----------
+el("text", {x: 24, y: 38, class: "t-title"}, null, "Where should the cars be? 14 days, 10 stations");
+el("text", {x: 24, y: 55, class: "t-sub"}, null,
+   `Expected values over ${DATA.n_scenarios} demand scenarios (our scorer). Circle area = cars at the station.`);
+
+function buildStrip(key, y, title, subtitle) {
+  const g = el("g", {transform: `translate(${STRIP.x},${y})`});
+  for (const [name, rx, ry, rw, rh] of REGIONS) {
+    el("rect", {x: rx, y: ry, width: rw, height: rh, rx: 14, fill: cssVar("--region")}, g);
+    el("text", {x: rx + 14, y: ry + 22, class: "t-cap"}, g, name);
+  }
+  const arcs = el("g", {}, g);
+  el("text", {x: 372, y: 34, class: "t-strip halo"}, g, title);
+  el("text", {x: 372, y: 54, class: "t-sub halo"}, g, subtitle);
+  const nodes = el("g", {}, g), moving = el("g", {}, g), pops = el("g", {}, g);
+  const st = S.map((s, i) => {
+    const [x, y0] = POS[s], n = el("g", {class: "station"}, nodes);
+    const c = el("circle", {cx: x, cy: y0, r: 10, stroke: "#6f6e68", "stroke-width": 1.2}, n);
+    const count = el("text", {x, y: y0, class: "t-count"}, n);
+    const label = el("text", {x, y: y0, class: "t-station"}, n, DATA.stations[i].station_name);
+    n.addEventListener("mousemove", ev => showTip(ev, key, i));
+    n.addEventListener("mouseleave", hideTip);
+    return {c, count, label, x, y: y0};
+  });
+  // routes, movers and the +n / −n labels of this plan
+  const p = DATA.plans[key], movers = buildMovers(p.transfers), seen = new Set();
+  for (const m of movers) if (!seen.has(m.key)) {
+    seen.add(m.key);
+    el("path", {d: `M${m.x0},${m.y0} Q${m.cx},${m.cy} ${m.x1},${m.y1}`, fill: "none", stroke: "#d6d5cd", "stroke-width": 1}, arcs);
+  }
+  for (const m of movers) {
+    m.el = m.mode === "truck"
+      ? el("rect", {x: -5.5, y: -3, width: 11, height: 6, rx: 1.6, fill: "#2b2b29", stroke: SURFACE, "stroke-width": 1, visibility: "hidden"}, moving)
+      : el("circle", {r: 2.8, fill: SURFACE, stroke: "#2b2b29", "stroke-width": 1.6, visibility: "hidden"}, moving);
+  }
+  const mk = (list, sign) => list.map(r => ({...r, sign, t0: r.day - 1 + 0.12,
+    el: el("text", {class: "t-pop", visibility: "hidden"}, pops, (sign > 0 ? "+" : "−") + r.cars)}));
+  return {key, st, movers, pops: [...mk(p.removals, -1), ...mk(p.additions, 1)]};
+}
+function describe(key) {                // what the plan does, in words
+  const t = DATA.totals[key], byTruck = DATA.plans[key].transfers.filter(x => x.mode === "truck").reduce((a, x) => a + x.cars, 0);
+  const parts = [];
+  if (t.added) parts.push(`${t.added} cars added`);
+  if (t.removed) parts.push(`${t.removed} cars removed`);
+  if (t.transferred) parts.push(`${t.transferred} moved (${byTruck} by truck)`);
+  return parts.length ? parts.join(" · ") : "the fleet stays where rentals leave it";
+}
+const tp = DATA.totals.plan, REF = DATA.ref_label;
+const stripA = buildStrip("ref", STRIP.yA, REF, describe("ref") + (DATA.totals.ref.transferred ? "" : " · no transfers"));
+const stripB = buildStrip("plan", STRIP.yB, "Our plan", describe("plan"));
+
+// timeline
+const tl = el("g", {transform: `translate(${TL.x},${TL.y})`, style: "cursor:pointer"});
+const cw = TL.w / DAYS;
+for (let d = 0; d < DAYS; d++) {
+  el("rect", {x: d * cw + 1, y: 0, width: cw - 2, height: TL.h, rx: 5, fill: isWeekend(d) ? TRACK : "transparent", stroke: RULE, "stroke-width": 1}, tl);
+  el("text", {x: (d + 0.5) * cw, y: 18, class: "t-day"}, tl, WD[dates[d].getDay()]);
+  el("text", {x: (d + 0.5) * cw, y: 36, class: "t-daynum"}, tl, dates[d].getDate());
+}
+el("rect", {x: 0, y: TL.h + 7, width: TL.w, height: 4, rx: 2, fill: TRACK}, tl);
+const tlFill = el("rect", {x: 0, y: TL.h + 7, width: 0, height: 4, rx: 2, fill: INK}, tl);
+const tlHead = el("rect", {x: -1.5, y: -4, width: 3, height: TL.h + 17, rx: 1.5, fill: INK}, tl);
+el("rect", {x: 0, y: -6, width: TL.w, height: TL.h + 24, fill: "transparent"}, tl);
+
+// play / pause button
+const btn = el("g", {transform: `translate(${BTN.x},${BTN.y})`, style: "cursor:pointer", role: "button", tabindex: 0, "aria-label": "Play"});
+el("circle", {r: BTN.r, fill: INK}, btn);
+const btnIcon = el("path", {fill: SURFACE}, btn);
+const ICON = {play: "M-6.5,-10 L11,0 L-6.5,10 Z", pause: "M-8.5,-9.5h6v19h-6z M2.5,-9.5h6v19h-6z"};
+function updateBtn() {
+  btnIcon.setAttribute("d", playing ? ICON.pause : ICON.play);
+  btn.setAttribute("aria-label", playing ? "Pause" : "Play");
+}
+
+// right panel
+const P = PANEL, pw = P.r - P.x;
+const dateText = el("text", {x: P.x, y: 44, class: "t-date"});
+const dayText = el("text", {x: P.r, y: 44, class: "t-sub", "text-anchor": "end"});
+el("text", {x: P.x, y: 84, class: "t-cap"}, null, "EXPECTED PROFIT SO FAR");
+function profitRow(y, label, stroke, width) {
+  el("line", {x1: P.x, x2: P.x + 22, y1: y - 6, y2: y - 6, stroke, "stroke-width": width, "stroke-linecap": "round"});
+  el("text", {x: P.x + 32, y, class: "t-row"}, null, label);
+  return el("text", {x: P.r, y: y + 2, class: "t-val"});
+}
+const valPlan = profitRow(116, "Our plan", INK, 3), valNothing = profitRow(148, REF, NOTHING, 2.5);
+el("rect", {x: P.x, y: 164, width: pw, height: 42, rx: 8, fill: cssVar("--region")});
+el("text", {x: P.x + 14, y: 190, class: "t-row"}, null, "Difference");
+const valDelta = el("text", {x: P.r - 12, y: 194, class: "t-delta"});
+
+// cumulative profit chart
+const CH = {x: P.x + 34, y: 232, w: pw - 46, h: 190};
+const yMax = Math.ceil(Math.max(tp.profit, DATA.totals.ref.profit) / 1e6) * 1e6;
+const cx_ = t => CH.x + t / DAYS * CH.w, cy_ = v => CH.y + CH.h - v / yMax * CH.h;
+for (let d = 0; d < DAYS; d++) if (isWeekend(d)) el("rect", {x: cx_(d), y: CH.y, width: CH.w / DAYS, height: CH.h, fill: cssVar("--region")});
+for (let v = 0; v <= yMax; v += 1e6) {
+  el("line", {x1: CH.x, x2: CH.x + CH.w, y1: cy_(v), y2: cy_(v), stroke: v ? RULE : "#b9b8b0", "stroke-width": 1});
+  el("text", {x: CH.x - 7, y: cy_(v) + 3.5, class: "t-axis", "text-anchor": "end"}, null, v ? (v / 1e6) + " M" : "0");
+}
+for (const d of [0, 6, 13]) el("text", {x: cx_(d + 0.5), y: CH.y + CH.h + 15, class: "t-axis", "text-anchor": "middle"}, null, `${dates[d].getDate()} ${MON[dates[d].getMonth()]}`);
+const lineNothing = el("path", {fill: "none", stroke: NOTHING, "stroke-width": 2.2, "stroke-linejoin": "round", "stroke-linecap": "round"});
+const linePlan = el("path", {fill: "none", stroke: INK, "stroke-width": 2.6, "stroke-linejoin": "round", "stroke-linecap": "round"});
+const dotNothing = el("circle", {r: 4.5, fill: NOTHING, stroke: SURFACE, "stroke-width": 2});
+const dotPlan = el("circle", {r: 4.5, fill: INK, stroke: SURFACE, "stroke-width": 2});
+
+// demand served
+el("text", {x: P.x, y: 476, class: "t-cap"}, null, "NEW DEMAND SERVED SO FAR");
+function servedRow(y, label, fill) {
+  el("text", {x: P.x, y: y + 4, class: "t-small"}, null, label);
+  el("rect", {x: P.x + 78, y: y - 4, width: pw - 130, height: 8, rx: 4, fill: TRACK});
+  return {bar: el("rect", {x: P.x + 78, y: y - 4, width: 0, height: 8, rx: 4, fill}),
+          val: el("text", {x: P.r, y: y + 4.5, class: "t-row", "text-anchor": "end", "font-weight": 600})};
+}
+const srvPlan = servedRow(498, "Our plan", INK), srvNothing = servedRow(520, REF, NOTHING);
+
+// moves so far
+el("text", {x: P.x, y: 560, class: "t-cap"}, null, "OUR PLAN SO FAR");
+const movesText = el("text", {x: P.x, y: 582, class: "t-row"});
+
+// legend
+const LG = {y: 618};
+const grad = el("linearGradient", {id: "div"}, el("defs", {}));
+for (let i = 0; i <= 10; i++) el("stop", {offset: i * 10 + "%", "stop-color": color(i / 5 - 1)}, grad);
+el("rect", {x: P.x, y: LG.y, width: 136, height: 10, rx: 5, fill: "url(#div)", stroke: "#b9b8b0", "stroke-width": 0.8});
+el("text", {x: P.x, y: LG.y + 25, class: "t-small"}, null, "demand lost");
+el("text", {x: P.x + 136, y: LG.y + 25, class: "t-small", "text-anchor": "end"}, null, "cars idle");
+el("rect", {x: P.x + 160, y: LG.y + 2, width: 11, height: 6, rx: 1.6, fill: "#2b2b29"});
+el("text", {x: P.x + 178, y: LG.y + 9, class: "t-small"}, null, "truck (≤ 8 cars)");
+el("circle", {cx: P.x + 165.5, cy: LG.y + 21, r: 2.8, fill: SURFACE, stroke: "#2b2b29", "stroke-width": 1.6});
+el("text", {x: P.x + 178, y: LG.y + 25, class: "t-small"}, null, "driven car");
+el("text", {x: P.x + 286, y: LG.y + 9, class: "t-small", "font-weight": 700, fill: INK}, null, "+5  −12");
+el("text", {x: P.x + 286, y: LG.y + 25, class: "t-small"}, null, "added, removed");
+el("text", {x: P.x, y: 700, class: "t-hint"}, null, "Space: play / pause  ·  ← →: one day  ·  R: restart  ·  F: fullscreen");
+
+// ---------- frame ----------
+let tau = 0, playing = false, last = null;
+function drawStrip(strip) {
+  const p = DATA.plans[strip.key], count = {trucks: 0, trucked: 0, driven: 0, removed: 0, added: 0};
+  strip.st.forEach((n, i) => {
+    const cars = atDay(p.fleet[i], tau, INIT.fleet[i]), v = atDay(p.balance[i], tau, INIT.balance[i]), r = radius(cars);
+    n.c.setAttribute("r", r.toFixed(2));
+    n.c.setAttribute("fill", color(v));
+    n.count.textContent = r >= 11 ? Math.round(cars) : "";
+    n.count.setAttribute("fill", Math.abs(v) > 0.55 ? "#ffffff" : INK);
+    n.label.setAttribute("y", (n.y + r + 14).toFixed(1));
+  });
+  for (const m of strip.movers) {
+    if (tau > m.t0) { if (m.mode === "truck") { count.trucks++; count.trucked += m.cars; } else count.driven++; }
+    const q0 = (tau - m.t0) / (m.t1 - m.t0);
+    if (q0 <= 0 || q0 >= 1) { m.el.setAttribute("visibility", "hidden"); continue; }
+    const q = smooth(q0), a = 1 - q;
+    const x = a * a * m.x0 + 2 * a * q * m.cx + q * q * m.x1, y = a * a * m.y0 + 2 * a * q * m.cy + q * q * m.y1;
+    const tx = 2 * a * (m.cx - m.x0) + 2 * q * (m.x1 - m.cx), ty = 2 * a * (m.cy - m.y0) + 2 * q * (m.y1 - m.cy);
+    m.el.setAttribute("visibility", "visible");
+    m.el.setAttribute("transform", `translate(${x.toFixed(1)},${y.toFixed(1)}) rotate(${(Math.atan2(ty, tx) * 180 / Math.PI).toFixed(1)})`);
+  }
+  for (const r of strip.pops) {
+    if (tau > r.t0) count[r.sign > 0 ? "added" : "removed"] += r.cars;
+    const q = (tau - r.t0) / 0.85;
+    if (q <= 0 || q >= 1) { r.el.setAttribute("visibility", "hidden"); continue; }
+    const i = sIdx[r.station], n = strip.st[i], rad = radius(atDay(p.fleet[i], tau, INIT.fleet[i]));
+    r.el.setAttribute("visibility", "visible");
+    r.el.setAttribute("x", (n.x + rad * 0.72 + 3).toFixed(1));
+    r.el.setAttribute("y", (n.y - rad * 0.72 - 2 - 16 * q).toFixed(1));
+    r.el.setAttribute("opacity", (q < 0.6 ? 1 : (1 - q) / 0.4).toFixed(2));
+  }
+  return count;
+}
+function linePath(arr) {
+  let d = `M${cx_(0)},${cy_(0)}`;
+  const full = Math.min(Math.floor(tau), DAYS);
+  for (let i = 1; i <= full; i++) d += ` L${cx_(i).toFixed(1)},${cy_(cumul(arr, i)).toFixed(1)}`;
+  if (tau > full) d += ` L${cx_(tau).toFixed(1)},${cy_(cumul(arr, tau)).toFixed(1)}`;
+  return d;
+}
+function draw() {
+  drawStrip(stripA);
+  const c = drawStrip(stripB);
+
+  const di = clamp(Math.floor(tau), 0, DAYS - 1), dt = dates[di];
+  dateText.textContent = `${WD[dt.getDay()]} ${dt.getDate()} ${MON[dt.getMonth()]}`;
+  dayText.textContent = `day ${di + 1} of ${DAYS}`;
+  const pp = cumul(DATA.plans.plan.profit, tau), pn = cumul(DATA.plans.ref.profit, tau);
+  valPlan.textContent = fmtM(pp); valNothing.textContent = fmtM(pn);
+  const diff = pp - pn, done = tau >= DAYS;
+  valDelta.textContent = (diff >= 0 ? "+" : "−") + fmtM(Math.abs(diff)) + (done ? `  (+${Math.round(diff / pn * 100)} %)` : "");
+  linePlan.setAttribute("d", linePath(DATA.plans.plan.profit)); lineNothing.setAttribute("d", linePath(DATA.plans.ref.profit));
+  dotPlan.setAttribute("cx", cx_(tau)); dotPlan.setAttribute("cy", cy_(pp));
+  dotNothing.setAttribute("cx", cx_(tau)); dotNothing.setAttribute("cy", cy_(pn));
+  for (const [row, key] of [[srvPlan, "plan"], [srvNothing, "ref"]]) {
+    const dem = cumul(DATA.plans[key].demandDay, tau), share = dem > 0 ? cumul(DATA.plans[key].servedDay, tau) / dem : 0;
+    row.bar.setAttribute("width", ((pw - 130) * share).toFixed(1));
+    row.val.textContent = dem > 0 ? Math.round(share * 100) + " %" : "–";
+  }
+  movesText.textContent = `${c.trucks} trucks with ${c.trucked} cars · ${c.driven} driven · ${c.removed} removed` + (c.added ? ` · ${c.added} added` : "");
+  tlFill.setAttribute("width", (tau / DAYS * TL.w).toFixed(1));
+  tlHead.setAttribute("x", (tau / DAYS * TL.w - 1.5).toFixed(1));
+  updateBtn();
+}
+function frame(now) {
+  if (playing) {
+    if (last !== null) tau = Math.min(DAYS, tau + (now - last) / 1000 / SEC_PER_DAY);
+    last = now;
+    if (tau >= DAYS) playing = false;
+    draw();
+    requestAnimationFrame(frame);
+  }
+}
+function play(on) {
+  if (on && tau >= DAYS) tau = 0;
+  playing = on; last = null;
+  updateBtn();
+  if (on) requestAnimationFrame(frame);
+}
+function seek(t) { tau = clamp(t, 0, DAYS); last = null; draw(); }
+
+// ---------- interaction ----------
+btn.addEventListener("click", () => { play(!playing); btn.blur(); });
+window.addEventListener("keydown", ev => {
+  if (ev.key === " " || (ev.key === "Enter" && ev.target === btn)) { ev.preventDefault(); play(!playing); }
+  else if (ev.key === "ArrowRight") { play(false); seek(Math.floor(tau + 1e-6) + 1); }
+  else if (ev.key === "ArrowLeft") { play(false); seek(Math.ceil(tau - 1e-6) - 1); }
+  else if (ev.key === "r" || ev.key === "R") { play(false); seek(0); }
+  else if (ev.key === "f" || ev.key === "F") { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); }
+});
+function tlSeek(ev) {
+  const pt = new DOMPoint(ev.clientX, ev.clientY).matrixTransform(tl.getScreenCTM().inverse());
+  seek(pt.x / TL.w * DAYS);
+}
+let dragging = false;
+tl.addEventListener("pointerdown", ev => { dragging = true; tl.setPointerCapture(ev.pointerId); play(false); tlSeek(ev); });
+tl.addEventListener("pointermove", ev => { if (dragging) tlSeek(ev); });
+tl.addEventListener("pointerup", () => { dragging = false; });
+
+const tip = document.getElementById("tip");
+function showTip(ev, key, i) {
+  const p = DATA.plans[key], d = clamp(Math.floor(tau), 0, DAYS - 1), s = DATA.stations[i];
+  const f = v => Math.round(v).toLocaleString("en");
+  tip.innerHTML = `<b>${s.station_name}</b> <span>(${s.station_type}, ${key === "plan" ? "our plan" : REF.toLowerCase()}, day ${d + 1})</span><br>` +
+    `${f(p.fleet[i][d])} cars at the station<br>${f(p.free[i][d])} available for new rentals<br>` +
+    `${f(p.demand[i][d])} expected new demand<br>${f(p.served[i][d])} served, ${f(p.demand[i][d] - p.served[i][d])} lost`;
+  tip.style.display = "block";
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  tip.style.left = Math.min(ev.clientX + 14, window.innerWidth - w - 8) + "px";
+  tip.style.top = Math.max(8, ev.clientY - h - 12) + "px";
+}
+function hideTip() { tip.style.display = "none"; }
+
+draw();
+if (new URLSearchParams(location.search).has("autoplay")) play(true);
+</script>
+</body>
+</html>
