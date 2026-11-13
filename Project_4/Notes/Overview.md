@@ -47,3 +47,4 @@ Agent instructions for this repo live in `CLAUDE.md` at the repo root.
 - 2026-11-12: added `CLAUDE.md`, plus the [[Models]], [[Experiments]] and [[Decisions]] notes; HiGHS installed as the default solver.
 - 2026-11-12: split models into `Models/` (index + one note per version, [[M0 Baseline]]); added `Templates/Model Template`.
 - 2026-11-12: agreed on the plan for the day in [[Project Plan]].
+- 2026-11-12: **Level 0 done**: `fleetopt/level0.py` matches all 10 rows of `check_values.csv`; own validity check `fleetopt/evaluate.py` (R5) says do-nothing and baseline are valid. See [[Decisions]].

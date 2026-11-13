@@ -26,7 +26,7 @@ Back to [[Overview]]
 - [ ] Uploaded to the shared team folder under a **new** name (e.g. `final_candidate_v3.csv`) and read its `.result.md`:
   - [ ] **Valid**: zero violations
   - [ ] Profit is above the **baseline** and the **do-nothing** plan on `leaderboard.md`
-- [ ] Our own check of the validity rules:
+- [ ] Our own check of the validity rules (automated: `fleetopt.evaluate.check_validity`, or `scripts/run_level0.py <plan.csv>`):
   - [ ] fleet ≥ committed car-days for **every** station × category × day
   - [ ] Σ additions per category ≤ `addition_cap`; Σ removals ≤ `removal_cap`
   - [ ] all ids, categories, modes and dates are valid; dates are inside 2027-03-01 … 2027-03-14

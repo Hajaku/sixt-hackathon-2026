@@ -45,13 +45,13 @@ $N^d$ = car-days on day d from rentals booked on or after day 1. $B^d$ = committ
 **Why not "mean − committed":** $E[T]-B^d$ is only right if B and N are uncorrelated. Rough check: residual corr(B, N) ≈ **+0.24** (stations, 7-day cutoff, n = 450). So the naive estimate moves the wrong way: high B ⇒ it predicts less to come, while the data suggest more.
 
 **A. Model-based**
-- **Assumptions:** pickups arrive at rate λ(s, k, weekday); rental length L (car-days, both ends counted) has a distribution per category; lead ℓ = pickup − booking is independent of L.
+- **Assumptions:** pickups arrive at rate λ(s, k, weekday). Rental length L (car-days, both ends counted) and lead ℓ = pickup − booking have a **joint** distribution per station type × category. We don't assume L ⟂ ℓ.
 - A pickup on horizon day p counts for $N^d$ if $L \ge d-p+1$ and $\ell \le p-1$. Pickups before day 1 are all committed.
-$$E[N^d]=\sum_{p=1}^{d}\lambda(s,k,\mathrm{wd}(p))\;P(L\ge d-p+1)\;P(\ell\le p-1)$$
+$$E[N^d]=\sum_{p=1}^{d}\lambda(s,k,\mathrm{wd}(p))\;P\big(L\ge d-p+1,\ \ell\le p-1 \,\big|\, \text{type}(s),k\big)$$
 - **λ:** mean daily pickups per (s, k, weekday) from completed **plus open** rentals. Together they hold every pickup in the window.
-- **P(L ≥ ·):** empirical survival per category, or per s × k if the counts allow.
-- **P(ℓ ≤ ·):** empirical lead-time CDF. Check for weekday or category dependence. There's no truncation, because every historical pickup is observed whatever its lead.
-- **Scenarios:** Poisson or NegBin pickups, then sample L and ℓ for each. This is the generator for the expected-revenue curves and for our own scorer.
+- **Joint P(L ≥ a, ℓ ≤ b):** the empirical fraction of historical rentals with L ≥ a and ℓ ≤ b, per station type × category (n ≈ 1,100–7,300 per group). There's no truncation bias: the sample is every pickup in the 8-week window, whatever its L or ℓ, since open rentals are added back. For scenarios, sample (L, ℓ) **pairs** from the same group.
+- **Check (2026-11-13, see [[Decisions]]):** in this data, L and ℓ are practically independent (Spearman −0.002 overall; the joint/product ratio of the probabilities above is within 1 %). What does matter is the **station type**: mean lead is 3.9–4.2 d at airports vs. 4.6–4.9 d downtown. So the grouping matters more than the joint estimate. We keep the joint one anyway, because it costs nothing and needs no assumption. Recheck per station if the counts allow.
+- **Scenarios:** Poisson or NegBin pickups, then sample one (L, ℓ) pair for each from the joint empirical distribution of its group. This is the generator for the expected-revenue curves and for our own scorer.
 
 **B. Empirical pseudo-snapshots**
 - Choose dates $t_0'$ in the history with ≥ 10 days of buffer before and 14 after.
@@ -85,7 +85,7 @@ $$E[N^d]=\sum_{p=1}^{d}\lambda(s,k,\mathrm{wd}(p))\;P(L\ge d-p+1)\;P(\ell\le p-1
 - **Prune transfer arcs:** the towns are about 80–250 km apart. Maybe drivers within a town and trucks between towns.
 
 ### 5. Easy to forget
-- [ ] **Level 0** matches `check_values.csv`. Validity depends on it.
+- [x] **Level 0** matches `check_values.csv`. Validity depends on it. (`fleetopt/level0.py`, 10/10 rows)
 - [ ] **Our own scorer** `fleetopt/evaluate.py`: R1–R11 exactly (greedy upgrades, truck `ceil`), run on 100+ sampled scenarios. That's how we compare models, since the leaderboard has one scenario.
 - [ ] **Upload do-nothing + baseline early.** Their `.result.md` sanity-checks the forecast and our scorer.
 
@@ -102,7 +102,7 @@ $$E[N^d]=\sum_{p=1}^{d}\lambda(s,k,\mathrm{wd}(p))\;P(L\ge d-p+1)\;P(\ell\le p-1
 **Rule:** a valid plan stays uploaded at all times. A new version is only promoted if it beats the previous one on our scenario set.
 
 ## Milestones
-- [ ] Level 0 matches check_values
+- [x] Level 0 matches check_values
 - [ ] do-nothing + baseline uploaded, reference profits noted in [[Experiments]]
 - [ ] base-revenue table
 - [ ] own scorer agrees with the public `.result.md`
