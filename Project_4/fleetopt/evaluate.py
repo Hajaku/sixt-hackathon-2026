@@ -235,3 +235,27 @@ def summarize(scores: pd.DataFrame) -> pd.Series:
     s["valid"] = bool(scores["valid"].all())
     s["scenarios"] = len(scores)
     return pd.Series(s, dtype=object)
+
+
+def compare_plans(inst: Instance, plans: dict[str, pd.DataFrame], scenarios: pd.DataFrame,
+                  base: pd.DataFrame, reference: str | None = None) -> pd.DataFrame:
+    """Score several plans on the same scenarios (common random numbers), one row per plan.
+
+    Columns: valid, profit (mean), se, the mean breakdown, action counts, and the difference to
+    the reference plan (default: the first) with its paired standard error.
+    """
+    rows, profit = {}, {}
+    for name, plan in plans.items():
+        per = score_plan(inst, plan, scenarios, base)
+        s = summarize(per)
+        profit[name] = per["profit"].to_numpy()
+        rows[name] = {"valid": bool(s["valid"]), "profit": s["profit"], "se": s["profit_se"],
+                      "new_rev": s["new_revenue"], "holding": s["holding_cost"], "addition": s["addition_cost"],
+                      "transfer": s["transfer_cost"], "added": s["cars_added"], "removed": s["cars_removed"],
+                      "transferred": s["cars_transferred"]}
+    out = pd.DataFrame.from_dict(rows, orient="index")
+    ref = reference or next(iter(plans))
+    diff = {n: p - profit[ref] for n, p in profit.items()}
+    out[f"vs_{ref}"] = [diff[n].mean() for n in out.index]
+    out["diff_se"] = [diff[n].std(ddof=1) / np.sqrt(len(diff[n])) if len(diff[n]) > 1 else np.nan for n in out.index]
+    return out
