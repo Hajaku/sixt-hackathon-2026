@@ -1,7 +1,7 @@
 # Submission: Project 4, Fleet Allocation Challenge
 
 ## Authors
-**Team:** Lukas Brandl, Dr. Leander Schnaars
+**Team:** Dr. Lukas Brandl, Dr. Leander Schnaars
 
 **Project:** Project 4: Fleet Allocation Challenge
 
