@@ -1,0 +1,86 @@
+% Project 4 slides (max 5). Build: cd Project_4/submission && latexmk -pdf slides.tex
+\documentclass[aspectratio=169,11pt]{beamer}
+\usetheme{default}
+\usecolortheme{seahorse}
+\setbeamertemplate{navigation symbols}{}
+\usepackage{booktabs,amsmath,amssymb}
+
+\begin{document}
+
+\begin{frame}{Fleet Allocation: one exact MIP}
+\small Lukas Brandl, Dr.\ Leander Schnaars \textbullet{} SIXT Hackathon 2026, Project 4
+\vspace{1em}
+\normalsize
+\begin{enumerate}
+  \item \textbf{Forecast} base revenue and demand from 8 history weeks
+  \item \textbf{One MIP} that reproduces the scorer's rules exactly, written as an SAA over demand scenarios
+  \item \textbf{Our own scorer} on 500 fresh scenarios, to pick the plan without overfitting to the public scenario
+\end{enumerate}
+\vspace{1em}
+Level 3 plan, valid: \textbf{4.11\,M} expected profit vs.\ 3.12\,M for the baseline (+32\,\%)
+\end{frame}
+
+\begin{frame}{Forecast}
+\begin{itemize}
+  \item \textbf{Base revenue:} ratio estimator per station $\times$ category, error $<2\,\%$, independent of demand $\Rightarrow$ a point estimate is enough
+  \item \textbf{Rental length:} one geometric distribution (mean $\approx 3$ days), independent of lead time and weekday
+  \item \textbf{Demand is not Poisson:} the overdispersion persists within a week and resets on Monday
+  \[
+  P_{skd}\mid G\sim\mathrm{Poi}\big(G_{skw}\,\lambda_{sk,\mathrm{wd}}\big),\qquad G\sim\Gamma(\tfrac1v,\tfrac1v),\quad \hat v=0.017\;(\pm13\,\%)
+  \]
+  \item \textbf{Bookings} update $G$ (conjugate Bayes): forecast error $-28\,\%$ in the backtest
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Model: SAA on a time-space network}
+\begin{itemize}
+  \item \textbf{Plan (first stage):} add or remove cars, transfer them by driver or truck (8 places); fleet flow with lead times; fleet $\ge$ committed car-days
+  \item \textbf{Per scenario (second stage):} serving, one-step upgrades, fare buckets with marginal revenues
+  \[
+  \max\ \tfrac{1}{|\Omega|}\textstyle\sum_\omega \text{revenue}^\omega\;-\;\text{holding}\;-\;\text{addition}\;-\;\text{transfer cost}
+  \]
+  \item \textbf{Point forecast} = SAA with one scenario, $D = E[D]$
+  \item \textbf{Exact ``own category first'' rule} (one binary per cell and scenario): \textbf{+100\,k}. Without it, the model plans upgrades the scorer never makes.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Results (our scorer, 500 test scenarios)}
+\centering
+\begin{tabular}{llr}
+\toprule
+Plan & Note & Profit \\
+\midrule
+\textbf{Point forecast (submitted)} & gap 0.6\,\% & \textbf{4.11\,M} \\
+SAA, 20 scenarios & gap 3.7\,\% & 4.10\,M \\
+Revenue curves & $E[\mathrm{rev}]$ as a function of capacity & 4.06\,M \\
+Point, without exact rule & & 3.99\,M \\
+No transfers (Level 1) & & 3.42\,M \\
+Baseline & fleetkit rule & 3.12\,M \\
+\bottomrule
+\end{tabular}
+\vspace{0.8em}
+
+\raggedright
+\begin{itemize}
+  \item Final plan: 233 cars removed, 898 transferred (mostly by truck)
+  \item Transfers ($+590$\,k) $\gg$ exact rules ($+100$\,k) $\gg$ choice of revenue model
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Limits and next steps}
+\textbf{Limits}
+\begin{itemize}
+  \item Only 8 weeks of history: no train/test split; the scorer uses our own demand model
+  \item SAA not converged in the time available (3--4\,\% gap)
+  \item Solved with Gurobi; the model is plain PuLP and also runs with HiGHS
+\end{itemize}
+\vspace{0.5em}
+\textbf{Next steps}
+\begin{itemize}
+  \item Rolling re-planning as bookings arrive
+  \item Decomposition for larger SAA
+  \item For SIXT: weekly fleet balancing and defleeting
+\end{itemize}
+\end{frame}
+
+\end{document}
